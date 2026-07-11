@@ -1,0 +1,167 @@
+.charging-dial-wrap {
+  display: grid;
+  justify-items: center;
+  gap: 0.6rem;
+}
+
+.charging-dial {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: grid;
+  place-items: center;
+}
+
+.charging-dial-svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(16, 24, 40, 0.06));
+}
+
+.charging-dial-track {
+  fill: none;
+  stroke: var(--track-color);
+}
+
+.charging-dial-progress {
+  fill: none;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.4s ease;
+  stroke: var(--muted-text);
+}
+
+.charging-dial-progress.tone-charging {
+  stroke: var(--success);
+}
+
+.charging-dial-progress.tone-available {
+  stroke: var(--info);
+}
+
+.charging-dial-progress.tone-preparing {
+  stroke: var(--warning);
+}
+
+.charging-dial-progress.tone-finishing,
+.charging-dial-progress.tone-suspended {
+  stroke: var(--secondary);
+}
+
+.charging-dial-progress.tone-error {
+  stroke: var(--error);
+}
+
+.charging-dial-progress.tone-neutral {
+  stroke: var(--track-strong-color);
+}
+
+.charging-dial-center {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 0 1.5rem;
+}
+
+.charging-dial-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--text-color);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.charging-dial-unit {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--muted-text);
+  margin-left: 0.25rem;
+}
+
+.charging-dial-status {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.charging-dial-status.tone-charging {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.charging-dial-status.tone-available {
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+.charging-dial-status.tone-preparing {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.charging-dial-status.tone-finishing,
+.charging-dial-status.tone-suspended {
+  color: var(--secondary);
+  background: var(--secondary-bg);
+}
+
+.charging-dial-status.tone-error {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.charging-dial-status.tone-neutral {
+  color: var(--muted-text);
+  background: var(--track-color);
+}
+
+.charging-dial-caption {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted-text);
+  text-align: center;
+}
+
+/* Shrink the ring on phones so it (plus its status pill, caption, and any
+   slider beneath it) doesn't dominate the screen - the goal is to fit the
+   whole overview card, not just the ring, without scrolling. */
+@media (max-width: 640px) {
+  .charging-dial,
+  .charging-dial-svg {
+    width: 128px;
+    height: 128px;
+  }
+
+  .charging-dial-wrap {
+    gap: 0.4rem;
+  }
+
+  .charging-dial-center {
+    padding: 0 1rem;
+  }
+
+  .charging-dial-value {
+    font-size: 1.7rem;
+  }
+
+  .charging-dial-unit {
+    font-size: 0.85rem;
+  }
+
+  .charging-dial-status {
+    font-size: 0.72rem;
+    padding: 0.24rem 0.65rem;
+  }
+
+  .charging-dial-caption {
+    font-size: 0.78rem;
+  }
+}

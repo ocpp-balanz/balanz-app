@@ -1,0 +1,360 @@
+.charger-overview {
+  display: grid;
+  gap: 1rem;
+}
+
+.section-card {
+  background: var(--panel);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 1rem;
+  box-shadow: var(--panel-shadow);
+}
+
+.overview-card {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.overview-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.overview-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.overview-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.75rem;
+  flex-wrap: wrap;
+}
+
+.dial-column {
+  display: grid;
+  justify-items: center;
+  gap: 0.85rem;
+  flex-shrink: 0;
+}
+
+.dial-control {
+  width: 200px;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dial-control input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.slider-header.compact {
+  font-size: 0.82rem;
+}
+
+.dial-apply-button {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+}
+
+.overview-stats {
+  flex: 1 1 260px;
+  min-width: 260px;
+}
+
+.overview-actions {
+  display: grid;
+}
+
+.hero-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.overview-card h2,
+.section-card h3 {
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.overview-card h2 {
+  font-size: clamp(1.4rem, 3.4vw, 1.8rem);
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: var(--muted-text);
+}
+
+.hero-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  color: var(--muted-text);
+  font-size: 0.9rem;
+}
+
+.network-pill,
+.muted-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+}
+
+.network-pill.is-online {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.network-pill.is-offline {
+  background: var(--track-color);
+  color: var(--muted-text);
+}
+
+.muted-chip {
+  background: var(--track-color);
+  color: var(--muted-text);
+}
+
+.free-vending-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.2rem 0.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.metric-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-color);
+}
+
+.metric-label {
+  color: var(--muted-text);
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.metric-card strong {
+  font-size: 1.05rem;
+  color: var(--text-color);
+}
+
+.control-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.slider-field {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.slider-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--text-color);
+}
+
+.slider-header output {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.slider-field input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.primary-button,
+.secondary-button {
+  border: none;
+  border-radius: 10px;
+  padding: 0.8rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.primary-button {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.secondary-button {
+  background: var(--panel-alt);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.primary-button:hover,
+.secondary-button:hover,
+.ghost-button:hover {
+  transform: translateY(-1px);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.ghost-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Phones: pack everything (name, badges, dial, controls, and all six
+   metrics) into one screen, no scrolling, by shrinking paddings/fonts and
+   keeping the dial and metrics side-by-side instead of stacked - stacking
+   them roughly doubles the vertical space this section needs. */
+@media (max-width: 640px) {
+  .section-card {
+    padding: 0.8rem 0.9rem;
+  }
+
+  .overview-card {
+    gap: 0.7rem;
+  }
+
+  .overview-top {
+    gap: 0.5rem;
+  }
+
+  .hero-copy {
+    gap: 0.15rem;
+  }
+
+  .overview-card h2 {
+    font-size: 1.25rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.85rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .network-pill,
+  .muted-chip {
+    padding: 0.3rem 0.55rem;
+    font-size: 0.76rem;
+  }
+
+  .overview-main {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.9rem;
+  }
+
+  .dial-column {
+    gap: 0.5rem;
+  }
+
+  .dial-control {
+    width: 128px;
+    gap: 0.35rem;
+  }
+
+  .slider-header.compact {
+    font-size: 0.72rem;
+  }
+
+  .dial-apply-button {
+    padding: 0.45rem 0.6rem;
+    font-size: 0.76rem;
+  }
+
+  .overview-stats {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .session-grid {
+    gap: 0.4rem;
+  }
+
+  .metric-card {
+    padding: 0.45rem 0.55rem;
+    gap: 0.15rem;
+  }
+
+  .metric-label {
+    font-size: 0.64rem;
+  }
+
+  .metric-card strong {
+    font-size: 0.88rem;
+  }
+
+  .hero-meta {
+    font-size: 0.78rem;
+    gap: 0.35rem 0.55rem;
+  }
+
+  .control-panel {
+    gap: 0.6rem;
+  }
+
+  .action-row {
+    gap: 0.5rem;
+  }
+
+  .primary-button,
+  .secondary-button {
+    padding: 0.6rem 0.85rem;
+  }
+}
+
+/* Only fall back to stacking the dial above the metrics on genuinely narrow
+   phones where side-by-side no longer has room to breathe. */
+@media (max-width: 360px) {
+  .overview-main {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .overview-stats {
+    min-width: 100%;
+  }
+}
+

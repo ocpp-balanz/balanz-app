@@ -1,0 +1,70 @@
+.charging-history-chart {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.charging-history-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart-gridline {
+  stroke: var(--border-color);
+  stroke-width: 1;
+  shape-rendering: crispEdges;
+}
+
+.chart-axis-label {
+  fill: var(--muted-text);
+  font-size: 10px;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+}
+
+.chart-line-offered {
+  stroke: var(--info);
+  stroke-dasharray: 4 3;
+}
+
+.chart-line-usage {
+  stroke: var(--success);
+}
+
+.chart-area-usage {
+  fill: var(--success);
+  opacity: 0.12;
+  stroke: none;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  font-size: 0.82rem;
+  color: var(--muted-text);
+}
+
+.chart-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.chart-swatch {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.chart-swatch-offered {
+  background: var(--info);
+}
+
+.chart-swatch-usage {
+  background: var(--success);
+}
