@@ -227,6 +227,44 @@ before building for a phone or emulator if possible. End users can also
 override it later from the in-app Settings panel without a rebuild — see
 "Server address (runtime setting)" above.
 
+## Docker (serving the built app)
+
+For trying the app on a device that can't run the Vite dev server directly —
+e.g. Safari on iOS, which has no Capacitor build in this repo yet — you can
+serve the production build from a small container instead:
+
+```bash
+docker compose up --build
+```
+
+This builds the app (Node, multi-stage) and serves the static `dist/` output
+via nginx on `http://localhost:8081` by default. From another device on the
+same network, use this machine's LAN IP instead of `localhost`
+(`http://<lan-ip>:8081`) — same idea as reaching the Vite dev server from a
+phone, just pointed at a container instead of `npm run dev`.
+
+Two things are configurable, both optional:
+
+- `HOST_PORT` — which host port nginx is published on (default `8081`).
+- `VITE_API_BASE_URL` — the build-time default backend address (default
+  `http://localhost:8000`), baked in the same way the Capacitor builds do
+  (see "Capacitor (iOS / Android)" above). It remains overridable afterwards
+  from the in-app Settings panel without rebuilding the image.
+
+Set either via a shell env var or a `.env` file in this directory (Docker
+Compose's own convention — separate from Vite's `.env.local` used by
+`npm run dev`), e.g.:
+
+```bash
+HOST_PORT=8081 VITE_API_BASE_URL=https://ocpp.example.com docker compose up --build
+```
+
+Serving over plain HTTP is fine even when the backend is `wss://` — the
+browser only blocks *insecure* `ws://` from an HTTPS page, not the other way
+around. This setup doesn't provide TLS itself; put a reverse proxy in front
+if you need `https://` for the app itself (not required for this app's own
+functionality).
+
 ## API contract
 
 The app authenticates via the `Login` command, sending `token` as the
@@ -254,6 +292,9 @@ full mapping, normalization, and the `USER_TYPES` / `canControlCharging` /
 ## Project structure
 
 ```
+Dockerfile                        Multi-stage build: npm build -> nginx serving dist/ (see "Docker" above)
+docker-compose.yml                Builds and runs the Dockerfile, publishing nginx on HOST_PORT (default 8081)
+nginx.conf                        SPA-friendly nginx config (falls back to index.html) used by the Dockerfile
 src/
   apiClient.js                    Centralized WebSocket API client (auth, calls, normalization, roles)
   App.jsx                         Top-level state/routing (dashboard vs. groups view)

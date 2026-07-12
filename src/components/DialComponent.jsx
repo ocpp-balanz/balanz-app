@@ -99,6 +99,14 @@ function QueryStatsIcon() {
   );
 }
 
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+      <path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z" fill="currentColor" />
+    </svg>
+  );
+}
+
 export default function DialComponent({
   charger,
   loading,
@@ -145,6 +153,12 @@ export default function DialComponent({
   // README and balanz/api.py's API_ALLOW, which doesn't list either
   // RemoteStartTransaction or RemoteStopTransaction for any other role.
   const canStop = Boolean(session && connector?.transactionId);
+  // RemoteStartTransaction only makes sense once a cable is plugged in and
+  // the charger is waiting for authorization (Preparing) or has just
+  // finished (Finishing, e.g. restarting for the same plugged-in vehicle) -
+  // OCPP has no concept of remotely starting a session on a connector that's
+  // simply Available (nothing plugged in yet).
+  const canRemoteStart = Boolean(connector && ['Preparing', 'Finishing'].includes(connector.status));
   const isAdmin = canControlCharging(userType);
   const canPrioritize = canSetChargePriority(userType);
   // Direct current-limit control only makes sense outside SmartCharging
@@ -266,7 +280,7 @@ export default function DialComponent({
                   >
                     <StopIcon />
                   </button>
-                ) : (
+                ) : canRemoteStart ? (
                   <button
                     type="button"
                     className="icon-button icon-button-play"
@@ -277,7 +291,7 @@ export default function DialComponent({
                   >
                     <PlayIcon />
                   </button>
-                )
+                ) : null
               ) : null}
 
               {hasGraphAccess ? (
@@ -317,57 +331,48 @@ export default function DialComponent({
                 <strong>{userDisplay}</strong>
               )}
             </article>
+            {isAllocationGroup && canStop ? (
+              <article className="metric-card">
+                <span className="metric-label">Session priority</span>
+                {canPrioritize ? (
+                  <div className="priority-field">
+                    <input
+                      type="number"
+                      className="priority-input"
+                      min={0}
+                      max={10}
+                      value={draftPriorityValue}
+                      disabled={saving || loading}
+                      onChange={(event) => {
+                        const next = Number(event.target.value);
+                        if (Number.isFinite(next)) {
+                          onDraftPriorityChange(Math.min(10, Math.max(0, next)));
+                        }
+                      }}
+                      aria-label="Session priority"
+                    />
+                    {hasPendingPriorityChange ? (
+                      <button
+                        type="button"
+                        className="icon-button-check"
+                        onClick={() => onApplyPriority(draftPriorityValue)}
+                        disabled={saving || loading}
+                        aria-label="Apply priority"
+                        title="Apply priority"
+                      >
+                        <CheckIcon />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <strong>{draftPriorityValue}</strong>
+                )}
+              </article>
+            ) : null}
           </div>
         ) : (
           <div className="inline-state">No active session on this charger.</div>
         )}
-
-        {isAllocationGroup && canStop ? (
-          <div className="overview-actions">
-            <div className="control-panel">
-              {canPrioritize ? (
-                <>
-                  <div className="stepper-field">
-                    <span className="stepper-label">Session priority</span>
-                    <div className="stepper-control">
-                      <button
-                        type="button"
-                        className="stepper-button"
-                        onClick={() => onDraftPriorityChange(Math.max(0, draftPriorityValue - 1))}
-                        disabled={saving || loading || draftPriorityValue <= 0}
-                        aria-label="Decrease session priority"
-                      >
-                        −
-                      </button>
-                      <output className="stepper-value">{draftPriorityValue}</output>
-                      <button
-                        type="button"
-                        className="stepper-button"
-                        onClick={() => onDraftPriorityChange(Math.min(10, draftPriorityValue + 1))}
-                        disabled={saving || loading || draftPriorityValue >= 10}
-                        aria-label="Increase session priority"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  <div className="action-row">
-                    <button
-                      className="primary-button"
-                      type="button"
-                      onClick={() => onApplyPriority(draftPriorityValue)}
-                      disabled={saving || loading || !hasPendingPriorityChange}
-                    >
-                      {saving ? 'Applying...' : 'Apply priority'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <span className="inline-state">Your account does not have permission to change this session's priority.</span>
-              )}
-            </div>
-          </div>
-        ) : null}
 
       </section>
 

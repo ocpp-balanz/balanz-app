@@ -43,5 +43,9 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 ## Workflow
 - Update the README whenever setup or runtime steps change.
 - Keep `package.json` scripts aligned with the actual web and Capacitor workflow.
+- Keep the `Dockerfile` / `docker-compose.yml` / `nginx.conf` aligned with the
+  actual build output (`dist/`) if the build tooling or output path changes -
+  this is the served path for devices (e.g. iOS Safari) that can't run the
+  Vite dev server or a Capacitor build directly.
 - Prefer changes that improve browser and mobile parity together.
 - Use `VITE_API_BASE_URL=http://localhost:8000` when testing against the local gateway.

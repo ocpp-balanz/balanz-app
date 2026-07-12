@@ -128,7 +128,14 @@ export default function App() {
       );
     } catch (error) {
       if (handleAuthFailure(error)) return;
-      setDetailError(formatError(error));
+      // A quiet call (background poll or the visibility-resume refresh below)
+      // races a possibly-stale connection on purpose - the client reconnects
+      // automatically on the next call, so a transient failure here isn't
+      // worth surfacing. Only report it when it's the result of something
+      // the user is actively waiting on.
+      if (!quiet) {
+        setDetailError(formatError(error));
+      }
     } finally {
       if (!quiet) {
         setDetailLoading(false);
