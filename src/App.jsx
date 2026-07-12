@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiError,
@@ -7,7 +7,7 @@ import {
   fetchChargerDetails,
   fetchChargers,
   fetchGroups,
-  getAutoRefreshEnabled,
+  getRefreshIntervalSeconds,
   getStoredSelectedChargerId,
   hasStoredAuthToken,
   isAuthError,
@@ -15,7 +15,6 @@ import {
   logout as logoutRequest,
   remoteStopTransaction,
   resumeStoredLogin,
-  setAutoRefreshEnabled as persistAutoRefreshEnabled,
   setChargePriority,
   setTxProfile,
   storeSelectedChargerId,
@@ -25,8 +24,10 @@ import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
 import MenuDrawer from './components/MenuDrawer';
 
-const CHARGER_REFRESH_INTERVAL_MS = 30000;
-const GROUPS_REFRESH_INTERVAL_MS = 30000;
+// Read once at module load - a changed interval takes effect after the
+// Settings panel's save-triggered reload, matching how the server address
+// override applies (see SettingsPanel.jsx).
+const REFRESH_INTERVAL_MS = getRefreshIntervalSeconds() * 1000;
 
 function formatError(error) {
   if (error instanceof ApiError || error instanceof Error) {
@@ -43,7 +44,6 @@ export default function App() {
 
   const [view, setView] = useState('dashboard'); // 'dashboard' | 'groups'
   const [menuOpen, setMenuOpen] = useState(false);
-  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(() => getAutoRefreshEnabled());
 
   const [selectedChargerId, setSelectedChargerId] = useState(() => getStoredSelectedChargerId());
   const [selectedCharger, setSelectedCharger] = useState(null);
@@ -220,24 +220,15 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
 
-  // Background polling of groups, only while auto-refresh is enabled. Kept
-  // separate from the initial load above so toggling auto-refresh doesn't
-  // re-trigger an extra fetch or reopen the menu.
-  useEffect(() => {
-    if (authState !== 'authenticated' || !autoRefreshEnabled) {
-      return undefined;
-    }
-
-    const intervalId = window.setInterval(() => {
-      void loadGroups({ quiet: true });
-    }, GROUPS_REFRESH_INTERVAL_MS);
-
-    return () => window.clearInterval(intervalId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, autoRefreshEnabled]);
+  // Groups are fetched once on login (above) and on demand via the Groups
+  // screen's own "Refresh" button - deliberately NOT polled in the
+  // background. The selected charger's own GetChargers refresh (below)
+  // already reflects that charger's live status, so a recurring GetGroups
+  // call on top of it was extra server load without extra value for the
+  // common case of watching a single charger.
 
   // Load the selected charger's detail whenever the selection changes or a
-  // manual refresh is requested.
+  // mutation (apply limit/priority, stop) requests a refresh.
   useEffect(() => {
     if (authState !== 'authenticated' || !selectedChargerId) {
       return undefined;
@@ -246,20 +237,76 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, selectedChargerId, detailRefreshToken]);
 
-  // Background polling of the selected charger's detail, only while
-  // auto-refresh is enabled.
+  // Background polling of the selected charger's detail.
   useEffect(() => {
-    if (authState !== 'authenticated' || !selectedChargerId || !autoRefreshEnabled) {
+    if (authState !== 'authenticated' || !selectedChargerId) {
       return undefined;
     }
 
     const intervalId = window.setInterval(() => {
       void loadChargerDetails(selectedChargerId, { quiet: true });
-    }, CHARGER_REFRESH_INTERVAL_MS);
+    }, REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, selectedChargerId, autoRefreshEnabled]);
+  }, [authState, selectedChargerId]);
+
+  // Success notices (e.g. "Updated session priority...") are transient -
+  // clear them a few seconds after they appear instead of leaving them on
+  // screen forever. Errors are left alone; they need explicit attention.
+  useEffect(() => {
+    if (!notice) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => setNotice(''), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
+  // Mobile browsers/WebViews can suspend the WebSocket while the app is
+  // backgrounded without ever firing its close handler, leaving `connected`
+  // stale until something tries to use it (see the readyState check in
+  // apiClient.js). Force an immediate refresh on resume instead of waiting
+  // for the next poll tick, so the first thing the user sees isn't a stale
+  // "no connection" error from a request that raced the wake-up.
+  useEffect(() => {
+    if (authState !== 'authenticated') {
+      return undefined;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState !== 'visible') {
+        return;
+      }
+      if (selectedChargerId) {
+        void loadChargerDetails(selectedChargerId, { quiet: true });
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, selectedChargerId]);
+
+  // Tracks the latest selectedChargerId for scheduleFollowUpRefresh below,
+  // since a plain closure over the state value would go stale if the user
+  // switches chargers before the 10s timer fires.
+  const selectedChargerIdRef = useRef(selectedChargerId);
+  useEffect(() => {
+    selectedChargerIdRef.current = selectedChargerId;
+  }, [selectedChargerId]);
+
+  // After a control action (current limit, priority, stop), the backend
+  // needs a moment to actually apply it - the immediate refresh right after
+  // the request often still shows the pre-change state. Rather than wait for
+  // the next full interval tick (up to REFRESH_INTERVAL_MS later), schedule
+  // one extra quiet refresh 10s out to pick up the settled state promptly.
+  function scheduleFollowUpRefresh(chargerId) {
+    window.setTimeout(() => {
+      if (selectedChargerIdRef.current === chargerId) {
+        void loadChargerDetails(chargerId, { quiet: true });
+      }
+    }, 10000);
+  }
 
   async function handleLogin(credentials) {
     setAuthLoading(true);
@@ -289,19 +336,6 @@ export default function App() {
     setDetailRefreshToken((value) => value + 1);
   }
 
-  function handleRefreshCurrent() {
-    if (!selectedChargerId) return;
-    setDetailRefreshToken((value) => value + 1);
-  }
-
-  function handleToggleAutoRefresh() {
-    setAutoRefreshEnabled((current) => {
-      const next = !current;
-      persistAutoRefreshEnabled(next);
-      return next;
-    });
-  }
-
   function handleOpenGroups() {
     setMenuOpen(false);
     setView('groups');
@@ -327,6 +361,7 @@ export default function App() {
       });
       setNotice(`Updated current limit to ${nextCurrent} A.`);
       setDetailRefreshToken((value) => value + 1);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
       setDetailError(formatError(error));
@@ -354,6 +389,7 @@ export default function App() {
       });
       setNotice(`Updated session priority to ${nextPriority}.`);
       setDetailRefreshToken((value) => value + 1);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
       setDetailError(formatError(error));
@@ -380,6 +416,7 @@ export default function App() {
       });
       setNotice('Stop request sent.');
       setDetailRefreshToken((value) => value + 1);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
       setDetailError(formatError(error));
@@ -412,8 +449,6 @@ export default function App() {
     return <LoginScreen loading={authLoading} error={authError} onLogin={handleLogin} />;
   }
 
-  const selectedState = selectedCharger?.status || (selectedChargerId ? 'Loading' : '--');
-
   return (
     <div className="app-shell">
       <MenuDrawer
@@ -442,25 +477,6 @@ export default function App() {
             <span />
           </button>
           <h1>Balanz</h1>
-        </div>
-
-        <div className="header-actions">
-          <button
-            type="button"
-            className={`toggle-switch ${autoRefreshEnabled ? 'is-on' : ''}`}
-            role="switch"
-            aria-checked={autoRefreshEnabled}
-            onClick={handleToggleAutoRefresh}
-          >
-            <span className="toggle-switch-track">
-              <span className="toggle-switch-thumb" />
-            </span>
-            <span className="toggle-switch-label">Auto-refresh</span>
-          </button>
-          <div className="pill">{selectedState}</div>
-          <button className="ghost-button" type="button" onClick={handleRefreshCurrent} disabled={!selectedChargerId}>
-            Refresh
-          </button>
         </div>
       </header>
 

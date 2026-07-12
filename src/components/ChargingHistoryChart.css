@@ -17,12 +17,12 @@
 
 .chart-axis-label {
   fill: var(--muted-text);
-  font-size: 10px;
+  font-size: 13px;
 }
 
 .chart-line {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 2.5;
 }
 
 .chart-line-offered {

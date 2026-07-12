@@ -2,11 +2,18 @@ import React from 'react';
 
 import './ChargingHistoryChart.css';
 
-const VIEW_WIDTH = 640;
-const PAD_LEFT = 38;
-const PAD_RIGHT = 12;
+// SVG text scales with the viewBox, not with CSS pixels: if VIEW_WIDTH is
+// much larger than the box actually rendered on screen, the fixed font-size
+// below (see .chart-axis-label) ends up shrunk by that same ratio and
+// becomes illegible - which is what was happening at 640 on a ~340px-wide
+// phone screen (a ~0.5x shrink). Using a width close to a typical phone's
+// rendered chart width keeps axis text close to its nominal size there,
+// while still reading fine when scaled up on a wider desktop modal.
+const VIEW_WIDTH = 340;
+const PAD_LEFT = 34;
+const PAD_RIGHT = 10;
 const PAD_TOP = 14;
-const PAD_BOTTOM = 26;
+const PAD_BOTTOM = 28;
 
 /**
  * Step chart of offered vs. used current (A) over time, built from a

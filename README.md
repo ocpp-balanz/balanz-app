@@ -38,9 +38,19 @@ It runs in the browser during development and is wrapped with
 - On successful login, the app asks the browser/WebView to save the
   credential so it doesn't need to be retyped — see "Saving the login on
   Android" below.
-- Background refresh (selected charger + groups, every 30s) can be turned
-  on or off from a header toggle, and defaults to on. The manual Refresh
-  button always works regardless of this setting.
+- The selected charger's data always refreshes automatically in the
+  background (`GetChargers`); the interval is a Settings panel field
+  (minimum 30s, default 60s) rather than a fixed value — see "Server address
+  (runtime setting)" below, which now also covers this. The groups list is
+  deliberately *not* polled in the background (only fetched once on login
+  and on demand via the Groups screen's own "Refresh" button), to avoid an
+  extra recurring `GetGroups` call on top of the charger's own refresh.
+- After a control action (current limit, priority, stop), an extra one-off
+  refresh runs 10s later on top of the immediate one, since the backend
+  needs a moment to actually apply the change.
+- The full charging graph opens in a large modal on demand (a "View
+  charging graph" button), instead of being squeezed into the page
+  permanently — see "Charging graph" below.
 
 All control actions (current limit changes, priority changes, stop) are
 routed through the centralized API client in `src/apiClient.js`, which owns
@@ -84,7 +94,7 @@ id as a workaround. The app detects that pattern (`id_tag` or `user_name`
 matching the charger id) and shows a "Free vending" badge in the session's
 User field instead of displaying the charger id as if it were a person.
 
-## Server address (runtime setting)
+## Server address & refresh interval (runtime settings)
 
 `VITE_API_BASE_URL` (below) is just the *build-time default*. The actual
 address used at runtime is resolved as: a value saved via the in-app
@@ -93,18 +103,35 @@ most for the native Android build, since it's a fixed APK end users can't
 rebuild themselves — they need a way to point it at their real server
 without a developer involved.
 
+The same panel also sets the background refresh interval (in seconds,
+minimum 30, default 60) used for both the selected charger's detail and the
+groups list — the app always refreshes automatically at this interval;
+there is no on/off toggle.
+
 Open Settings from the "Server settings" button on the sign-in screen (so it
 works before you've ever logged in) or from the hamburger menu once signed
-in. Saving an address stores it in `localStorage` — which persists the same
+in. Saving stores both values in `localStorage` — which persists the same
 way on the web build and inside the Capacitor Android WebView, so no extra
-native plugin is needed — and reloads the app so the change takes effect
-(the WebSocket client is only constructed once, at startup). "Reset to
-default" clears the override and reloads back to the build-time
-`VITE_API_BASE_URL`. Changing the address effectively starts a fresh
-session: sign in again against the new server.
+native plugin is needed — and reloads the app so the changes take effect
+(the WebSocket client and the polling intervals are only set up once, at
+startup). "Reset address to default" clears the server address override and
+reloads back to the build-time `VITE_API_BASE_URL`. Changing the address
+effectively starts a fresh session: sign in again against the new server.
 
-See `getApiBaseUrl` / `setApiBaseUrl` / `clearApiBaseUrl` in
+See `getApiBaseUrl` / `setApiBaseUrl` / `clearApiBaseUrl` /
+`getRefreshIntervalSeconds` / `setRefreshIntervalSeconds` in
 `src/apiClient.js` and `src/components/SettingsPanel.jsx`.
+
+## Charging graph
+
+The step chart of offered vs. used current (`ChargingHistoryChart`) opens in
+a large modal via a "View charging graph" button at the bottom of the main
+overview card (no separate card of its own), rather than always rendering
+inline — at its default inline size it would be cramped and partially cut
+off the bottom of the screen on a phone. See `src/components/DialComponent.jsx`
+(the `graphOpen` state and the `.modal-panel.is-wide` modal) and
+`src/components/ChargingHistoryChart.jsx` (reused as-is, just rendered
+larger via its `height` prop).
 
 ## Saving the login on Android
 
@@ -155,17 +182,8 @@ Optionally set `VITE_ASSUMED_VOLTAGE_V` (defaults to `230`) and
 Amps only, not power, so the app estimates kW as `phases x voltage x amps`
 (the standard EU convention: 230V phase voltage, 3-phase connection).
 Adjust these if a site uses a single-phase connection or a different
-voltage.
-
-Some EVs can only charge on a single phase even when plugged into a 3-phase
-charger. For those sessions, a 3-phase estimate would overstate the power
-several-fold relative to the energy the meter actually accrues. The app
-detects this per session — by comparing the session's measured energy
-(`energy_meter`) against what the assumed phase count predicts from the
-observed current over the elapsed session time — and automatically falls
-back to a 1-phase estimate for that session's "Power (est.)" figure,
-labelling it "1-phase" so it's clear the fallback kicked in. This only
-affects the display; it has no effect on Balanz's own charging behavior.
+voltage. This is a fixed, site-wide assumption — the app does not attempt to
+detect per-session phase count from the data Balanz reports.
 
 ## Run
 
@@ -242,7 +260,7 @@ src/
   styles.css                      Light theme (MUI-style palette matching balanz-ui)
   components/
     LoginScreen.jsx               Sign-in form, saves credential via Credential Management API
-    SettingsPanel.jsx             Runtime server-address editor (modal, reachable pre/post login)
+    SettingsPanel.jsx             Runtime server-address & refresh-interval editor (modal, reachable pre/post login)
     MenuDrawer.jsx                Hamburger menu: groups nav, charger switcher, settings, sign out
     GroupsScreen.jsx              Group status + charger picker
     DialComponent.jsx             Selected charger detail, session data, controls
@@ -263,6 +281,18 @@ src/
   the dial and controls intentionally show real backend-sourced metrics
   (current in Amps, estimated power) rather than inventing a percentage or
   cost figure.
+- Success notices (e.g. after changing priority) auto-dismiss after 5
+  seconds; errors stay on screen until the user takes another action.
+- The WebSocket client checks the socket's actual `readyState` rather than
+  a manually tracked flag, and the app proactively refreshes when the
+  browser/WebView tab becomes visible again — mobile OSes can silently kill
+  a backgrounded socket without firing its close handler, which previously
+  caused a stale "no connection" error on the first request after resuming.
+- Reconnecting after a dropped socket re-sends `Login` on the new connection
+  before treating it as ready, since Balanz tracks auth per-connection, not
+  per-token. Without this, a reconnect (e.g. after resuming from background)
+  looked to the app like the whole session had expired, when really only the
+  underlying socket needed to re-authenticate.
 - `ChargingDial` and `ChargingHistoryChart` are hand-rolled SVG components
   (no charting library) to keep the app small, per the project's own
   "keep the codebase small and easy to reason about" guideline — even though

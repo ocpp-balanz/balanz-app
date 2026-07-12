@@ -16,21 +16,6 @@
   gap: 1.25rem;
 }
 
-.overview-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.overview-badges {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
 .overview-main {
   display: flex;
   align-items: flex-start;
@@ -73,12 +58,49 @@
 
 .overview-actions {
   display: grid;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+}
+
+.graph-trigger-row {
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
 }
 
 .hero-copy {
   min-width: 0;
   display: grid;
   gap: 0.35rem;
+}
+
+.hero-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.hero-name-row h2 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hero-name-indicators {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Reuse the same online/offline dot GroupsScreen uses per-charger (see
+   .status-dot in styles.css), just re-centered for sitting inline next to
+   the charger name instead of at the top of a stacked card row. */
+.hero-name-indicators .status-dot {
+  margin-top: 0;
 }
 
 .overview-card h2,
@@ -99,12 +121,21 @@
 .hero-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem 0.75rem;
+  align-items: center;
   color: var(--muted-text);
   font-size: 0.9rem;
 }
 
-.network-pill,
+.hero-meta code {
+  font-size: 0.92em;
+}
+
+.hero-meta span:not(:last-child)::after {
+  content: '·';
+  margin: 0 0.5rem;
+  color: var(--border-color);
+}
+
 .muted-chip {
   display: inline-flex;
   align-items: center;
@@ -114,19 +145,6 @@
   font-size: 0.82rem;
   font-weight: 700;
   border: 1px solid var(--border-color);
-}
-
-.network-pill.is-online {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.network-pill.is-offline {
-  background: var(--track-color);
-  color: var(--muted-text);
-}
-
-.muted-chip {
   background: var(--track-color);
   color: var(--muted-text);
 }
@@ -254,12 +272,12 @@
     gap: 0.7rem;
   }
 
-  .overview-top {
+  .hero-name-row {
     gap: 0.5rem;
   }
 
   .hero-copy {
-    gap: 0.15rem;
+    gap: 0.2rem;
   }
 
   .overview-card h2 {
@@ -273,7 +291,6 @@
     white-space: nowrap;
   }
 
-  .network-pill,
   .muted-chip {
     padding: 0.3rem 0.55rem;
     font-size: 0.76rem;
@@ -281,7 +298,7 @@
 
   .overview-main {
     flex-wrap: nowrap;
-    align-items: center;
+    align-items: flex-start;
     gap: 0.9rem;
   }
 

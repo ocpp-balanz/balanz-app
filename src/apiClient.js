@@ -13,9 +13,15 @@
 const AUTH_TOKEN_KEY = 'balanz.authToken';
 const SELECTED_CHARGER_KEY = 'balanz.selectedChargerId';
 const API_BASE_URL_KEY = 'balanz.apiBaseUrl';
-const AUTO_REFRESH_KEY = 'balanz.autoRefresh';
+const REFRESH_INTERVAL_KEY = 'balanz.refreshIntervalSeconds';
 const SUBPROTOCOLS = ['ocpp1.6'];
 const CALL_TIMEOUT_MS = 20000;
+
+// The app always auto-refreshes (selected charger + groups) in the
+// background; only the interval is user-configurable, from the Settings
+// panel. 30s is a floor to avoid hammering the backend by mistake.
+export const MIN_REFRESH_INTERVAL_SECONDS = 30;
+export const DEFAULT_REFRESH_INTERVAL_SECONDS = 60;
 
 function readStorage(key, fallback = '') {
   try {
@@ -299,7 +305,13 @@ class BalanzWebsocketClient {
   }
 
   async connect() {
-    if (this.connected && this.ws) {
+    // Check the socket's actual readyState, not just our own `connected`
+    // bookkeeping - mobile browsers/WebViews can suspend a WebSocket while
+    // the app is backgrounded without ever firing onclose, so `connected`
+    // can be stale-true for a socket that's really dead. Trusting it alone
+    // caused the first request after resuming from background to fail with
+    // a "no connection" error even though the app looked otherwise fine.
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       return this.ws;
     }
     if (this._connectPromise) {
@@ -335,7 +347,21 @@ class BalanzWebsocketClient {
         this.connected = true;
         this.lastError = '';
         this._reconnectDelayMs = 1000;
-        settleResolve(ws);
+        if (this.token) {
+          // A freshly opened socket has no memory of a previous login - the
+          // Balanz server tracks auth per-connection. If we already have
+          // credentials from an earlier login (this is a reconnect, e.g.
+          // after the OS killed a backgrounded socket), re-send Login on
+          // this socket before treating it as ready. Without this, the very
+          // next command (GetGroups/GetChargers) comes back NotAuthorized on
+          // the new-but-unauthenticated connection, which looked to the app
+          // - and the user - like the whole session had expired.
+          this.call('Login', { token: this.token })
+            .then(() => settleResolve(ws))
+            .catch((error) => settleReject(error));
+        } else {
+          settleResolve(ws);
+        }
       };
 
       ws.onmessage = (event) => this._handleMessage(event.data);
@@ -412,10 +438,10 @@ class BalanzWebsocketClient {
   }
 
   async call(command, payload = {}, timeoutMs = CALL_TIMEOUT_MS) {
-    if (!this.ws || !this.connected) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       await this.connect();
     }
-    if (!this.ws || !this.connected) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       throw new ApiError('ConnectionError', 'The backend connection is not available.');
     }
 
@@ -426,7 +452,7 @@ class BalanzWebsocketClient {
 
     const message = JSON.stringify([2, messageId, command, payload]);
     this._sendQueue = this._sendQueue.catch(() => undefined).then(async () => {
-      if (!this.ws || !this.connected) {
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         throw new ApiError('ConnectionError', 'The backend connection is not available.');
       }
       this.ws.send(message);
@@ -518,12 +544,13 @@ class BalanzWebsocketClient {
       if (!this._shouldReconnect || !this.token) {
         return;
       }
-      this.connect()
-        .then(() => this._loginWithToken(this.token, { persist: false }))
-        .catch((error) => {
-          this.lastError = error instanceof Error ? error.message : String(error);
-          this._scheduleReconnect();
-        });
+      // connect() itself now re-authenticates on the new socket when
+      // this.token is set (see ws.onopen above), so there's no need to
+      // separately call _loginWithToken here.
+      this.connect().catch((error) => {
+        this.lastError = error instanceof Error ? error.message : String(error);
+        this._scheduleReconnect();
+      });
     }, delayMs);
   }
 
@@ -612,17 +639,21 @@ export function clearApiBaseUrl() {
   writeStorage(API_BASE_URL_KEY, '');
 }
 
-// Background polling (selected charger + groups) is user-controlled and
-// persisted, defaulting to on so it matches the app's prior always-on
-// behavior. Turning it off just stops the interval timers - the header's
-// manual Refresh button keeps working either way.
-export function getAutoRefreshEnabled() {
-  const stored = readStorage(AUTO_REFRESH_KEY, '');
-  return stored === '' ? true : stored === 'true';
+// Background polling (selected charger + groups) always runs; only the
+// interval is configurable, from the Settings panel. Invalid/too-low stored
+// values fall back to the default rather than being silently clamped on
+// every read, so a bad value in localStorage can't creep below the floor.
+export function getRefreshIntervalSeconds() {
+  const stored = Number(readStorage(REFRESH_INTERVAL_KEY, ''));
+  if (!Number.isFinite(stored) || stored < MIN_REFRESH_INTERVAL_SECONDS) {
+    return DEFAULT_REFRESH_INTERVAL_SECONDS;
+  }
+  return Math.round(stored);
 }
 
-export function setAutoRefreshEnabled(enabled) {
-  writeStorage(AUTO_REFRESH_KEY, enabled ? 'true' : 'false');
+export function setRefreshIntervalSeconds(seconds) {
+  const clamped = Math.max(MIN_REFRESH_INTERVAL_SECONDS, Math.round(Number(seconds) || DEFAULT_REFRESH_INTERVAL_SECONDS));
+  writeStorage(REFRESH_INTERVAL_KEY, String(clamped));
 }
 
 export async function login(credentials) {

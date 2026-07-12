@@ -4,14 +4,23 @@ import { getApiBaseUrl } from '../apiClient';
 import balanzLogo from '../images/balanz.png';
 import SettingsPanel from './SettingsPanel';
 
-// The Android Capacitor build is a single-page app that never navigates
-// after submitting the login form, so the WebView's usual heuristic for
-// offering to save a password (which waits for a page navigation) never
-// fires - unlike a regular browser tab. Explicitly using the standard
-// Credential Management API works around this: it tells Chromium (desktop
-// Chrome and Android's WebView, which is Chromium-based) to prompt the user
-// to save the credential right away. It's a no-op (feature-detected) on
-// browsers that don't support it, such as Safari/iOS.
+// Best-effort only: navigator.credentials.store()/PasswordCredential is a
+// non-standard, largely-abandoned API (MDN marks it deprecated/non-standard)
+// and is generally not implemented at all inside an embedded WebView like
+// Capacitor's Android build - only in the full Chrome browser app, which has
+// its own Password Manager UI to show the prompt in. It's feature-detected
+// and silently skipped where unsupported (Safari/iOS, and likely the Android
+// WebView build too).
+//
+// The mechanism that actually matters for saving a password inside the
+// Android WebView build is the OS-level Autofill framework (Android 8+),
+// which needs no JS API at all: it watches the real <form>/<input> elements
+// for correct `autocomplete` hints and for the form being submitted and then
+// removed from the DOM (which happens here automatically, since App.jsx
+// unmounts <LoginScreen> the moment authState flips to 'authenticated'). If
+// no save prompt appears on a device, check that a password manager is set
+// as the device's Autofill service under Settings > System > Languages &
+// input > Autofill service, rather than assuming this function is at fault.
 async function trySaveCredential(username, password) {
   if (typeof window === 'undefined' || !window.PasswordCredential || !navigator.credentials) {
     return;
@@ -56,6 +65,7 @@ export default function LoginScreen({ loading, error, onLogin }) {
             <span>User ID</span>
             <input
               type="text"
+              name="username"
               autoComplete="username"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
@@ -68,6 +78,7 @@ export default function LoginScreen({ loading, error, onLogin }) {
             <span>Password</span>
             <input
               type="password"
+              name="password"
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}

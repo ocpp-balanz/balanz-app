@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 
 import { canControlCharging, canSetChargePriority } from '../apiClient';
 import ChargingDial from './ChargingDial';
@@ -13,6 +13,13 @@ import './DialStyles.css';
 const ASSUMED_VOLTAGE_V = Number(import.meta.env.VITE_ASSUMED_VOLTAGE_V) || 230;
 const ASSUMED_PHASES = Number(import.meta.env.VITE_ASSUMED_PHASES) || 3;
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Fixed YYYY-MM-DD hh:mm format (24h, local time) rather than locale-driven
+// formatting, for a consistent, unambiguous display regardless of device
+// locale settings.
 function formatTimestamp(value) {
   if (!value && value !== 0) {
     return '--';
@@ -22,11 +29,8 @@ function formatTimestamp(value) {
     return String(value);
   }
   const milliseconds = raw > 10_000_000_000 ? raw : raw * 1000;
-  return new Intl.DateTimeFormat(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-    hourCycle: 'h23',
-  }).format(new Date(milliseconds));
+  const date = new Date(milliseconds);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 function formatMetric(value, suffix = '', precision = null) {
@@ -38,56 +42,6 @@ function formatMetric(value, suffix = '', precision = null) {
     return `${value.toFixed(digits)}${suffix}`;
   }
   return `${value}${suffix}`;
-}
-
-// Balanz reports current draw in Amps only, so power is derived from an
-// assumed voltage/phase count (see ASSUMED_VOLTAGE_V/ASSUMED_PHASES above).
-// Some EVs can only charge on a single phase. When that happens, the actual
-// energy the meter accrues over time falls well short of what the assumed
-// phase count would predict from the observed current, revealing the
-// mismatch. Detect that per-session and fall back to a 1-phase estimate for
-// that session's instantaneous power, instead of overstating it.
-function detectEffectivePhases(session, assumedVoltage, assumedPhases) {
-  if (!session || assumedPhases <= 1 || session.energyKwh === null || !session.startTime) {
-    return assumedPhases;
-  }
-
-  const history = Array.isArray(session.chargingHistory) ? session.chargingHistory : [];
-  const usageSamples = history
-    .map((entry) => entry.usage)
-    .filter((value) => Number.isFinite(value) && value > 0);
-  const avgUsageA =
-    usageSamples.length > 0
-      ? usageSamples.reduce((sum, value) => sum + value, 0) / usageSamples.length
-      : session.usageMeterA;
-
-  if (!Number.isFinite(avgUsageA) || avgUsageA <= 0) {
-    return assumedPhases;
-  }
-
-  const rawStart = Number(session.startTime);
-  if (!Number.isFinite(rawStart)) {
-    return assumedPhases;
-  }
-  const startSeconds = rawStart > 10_000_000_000 ? rawStart / 1000 : rawStart;
-  const elapsedHours = (Date.now() / 1000 - startSeconds) / 3600;
-
-  // Require enough elapsed time and energy for the comparison to be
-  // meaningful (avoids false positives during ramp-up or brief sessions).
-  if (!Number.isFinite(elapsedHours) || elapsedHours < 0.1 || session.energyKwh < 0.2) {
-    return assumedPhases;
-  }
-
-  const expectedKwh = (avgUsageA * assumedVoltage * assumedPhases * elapsedHours) / 1000;
-  if (expectedKwh <= 0) {
-    return assumedPhases;
-  }
-
-  // Actual energy well below the assumed-phase prediction (roughly a third
-  // of it, matching a 1-phase connection) means the car is only using one
-  // phase - revert to a 1-phase estimate for this session.
-  const ratio = session.energyKwh / expectedKwh;
-  return ratio < 0.6 ? 1 : assumedPhases;
 }
 
 function statusTone(status) {
@@ -124,6 +78,8 @@ export default function DialComponent({
   onDraftPriorityChange,
   onApplyPriority,
 }) {
+  const [graphOpen, setGraphOpen] = useState(false);
+
   const session = charger.session || null;
   const connector = charger.activeConnector || null;
   const tone = statusTone(charger.status);
@@ -139,12 +95,9 @@ export default function DialComponent({
 
   const history = Array.isArray(session?.chargingHistory) ? session.chargingHistory : [];
 
-  const effectivePhases = detectEffectivePhases(session, ASSUMED_VOLTAGE_V, ASSUMED_PHASES);
-  const isSinglePhaseSession = effectivePhases !== ASSUMED_PHASES;
-
   const estimatedPowerKw =
     session && session.usageMeterA !== null
-      ? (session.usageMeterA * ASSUMED_VOLTAGE_V * effectivePhases) / 1000
+      ? (session.usageMeterA * ASSUMED_VOLTAGE_V * ASSUMED_PHASES) / 1000
       : null;
 
   const canStop = Boolean(session && connector?.transactionId);
@@ -162,16 +115,26 @@ export default function DialComponent({
   return (
     <div className="charger-overview">
       <section className="section-card overview-card">
-        <div className="overview-top">
-          <div className="hero-copy">
+        <div className="hero-copy">
+          <div className="hero-name-row">
             <h2>{charger.alias}</h2>
-            <p className="hero-subtitle">{charger.description || 'No description provided'}</p>
-          </div>
-          <div className="overview-badges">
-            <div className={`network-pill ${charger.networkConnected ? 'is-online' : 'is-offline'}`}>
-              {charger.networkConnected ? 'Network connected' : 'Network offline'}
+            <div className="hero-name-indicators">
+              {loading ? <span className="muted-chip">Refreshing</span> : null}
+              <span
+                className={`status-dot ${charger.networkConnected ? 'is-online' : 'is-offline'}`}
+                role="img"
+                aria-label={charger.networkConnected ? 'Network connected' : 'Network offline'}
+                title={charger.networkConnected ? 'Network connected' : 'Network offline'}
+              />
             </div>
-            {loading ? <span className="muted-chip">Refreshing</span> : null}
+          </div>
+          <p className="hero-subtitle">{charger.description || 'No description provided'}</p>
+          <div className="hero-meta">
+            <span>
+              <code>{charger.chargerId}</code>
+            </span>
+            <span>{charger.groupId || 'Ungrouped'}</span>
+            {isAllocationGroup ? <span>Priority {connector?.priority ?? charger.priority ?? '--'}</span> : null}
           </div>
         </div>
 
@@ -223,7 +186,7 @@ export default function DialComponent({
                   <strong>{formatMetric(session.energyKwh, ' kWh', 2)}</strong>
                 </article>
                 <article className="metric-card">
-                  <span className="metric-label">Power (est.){isSinglePhaseSession ? ' · 1-phase' : ''}</span>
+                  <span className="metric-label">Power (est.)</span>
                   <strong>{formatMetric(estimatedPowerKw, ' kW', 1)}</strong>
                 </article>
                 <article className="metric-card">
@@ -321,27 +284,34 @@ export default function DialComponent({
           )}
         </div>
 
-        <div className="hero-meta">
-          <span>{charger.chargerId}</span>
-          <span>{charger.groupId || 'Ungrouped'}</span>
-          {isAllocationGroup ? <span>Priority {connector?.priority ?? charger.priority ?? '--'}</span> : null}
+        <div className="graph-trigger-row">
+          {history.length > 0 ? (
+            <button className="secondary-button" type="button" onClick={() => setGraphOpen(true)}>
+              View charging graph
+            </button>
+          ) : (
+            <span className="inline-state">No recent charging history available yet.</span>
+          )}
         </div>
       </section>
 
-      <section className="section-card">
-        <div className="section-header">
-          <div>
-            <p className="section-kicker">Recent activity</p>
-            <h3>Charging graph</h3>
+      {graphOpen ? (
+        <>
+          <button type="button" className="menu-backdrop is-open" aria-label="Close graph" onClick={() => setGraphOpen(false)} />
+          <div className="modal-panel is-wide panel">
+            <div className="modal-panel-header">
+              <div>
+                <p className="section-kicker">Recent activity</p>
+                <h3>Charging graph</h3>
+              </div>
+              <button className="ghost-button" type="button" onClick={() => setGraphOpen(false)}>
+                Close
+              </button>
+            </div>
+            <ChargingHistoryChart history={history} height={420} />
           </div>
-        </div>
-
-        {history.length > 0 ? (
-          <ChargingHistoryChart history={history} />
-        ) : (
-          <div className="inline-state">No recent charging history available yet.</div>
-        )}
-      </section>
+        </>
+      ) : null}
     </div>
   );
 }

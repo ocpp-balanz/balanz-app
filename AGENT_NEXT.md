@@ -1,11 +1,10 @@
-1. Adjust styling to match more closely balanz-ui, the normal web ui, see c:\workspace\balanz-ui. This includes using light mode instead of dark.
+1. When doing a auto-refresh, it seems that the App calls GetGroups and then GetChargers for the specific Charger. That seems unnecessary and putting unnecessary load on the server. I would suggest to only do the GetChargers call for a refresh.
 
-2. Please study the documentation available at https://balanz.readthedocs.io/
+2. The charging graph is very difficult to view. For instance, the x-axis text with the time of day is too small.
 
-3. Understand Group types. There are allocation groups (SmartCharging Group) and groups without SmartCharging. It is not allowed/safe to change charging speed for any charger/connector in a SmartCharging Group. This is the job of balanz backend!
+3. The buttom to show the graph for the current session does not needs it's own frame, but can be put in the main frame.
 
-3. Dial. Make it a real dial, with most important info as well. I am attaching a few screenshots
+4. If a command has been issued (change of max charging speed or priority), then do the next automatic refresh after 10 seconds.
 
-4. Charging graph. Make it a real graph. Make sure this graph can be reused, when we will later allow showing historic charging sessions.
+5. Date/time format should be YYYY-MM-DD hh:mm
 
-5. Understand "free vending". Sometimes the User name shown as charging will be simply the charger id. This is because the charger is set to Free Vending (i.e. no need to scan RFID). App should show this.
