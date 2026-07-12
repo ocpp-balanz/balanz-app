@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+import AboutPanel from './AboutPanel';
 import SettingsPanel from './SettingsPanel';
 
 export default function MenuDrawer({
@@ -15,6 +16,7 @@ export default function MenuDrawer({
   onLogout,
 }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   return (
     <>
@@ -83,6 +85,9 @@ export default function MenuDrawer({
           <button className="menu-action" type="button" onClick={() => setSettingsOpen(true)}>
             Server settings
           </button>
+          <button className="menu-action" type="button" onClick={() => setAboutOpen(true)}>
+            About
+          </button>
           <button className="menu-action danger" type="button" onClick={onLogout}>
             Sign out
           </button>
@@ -90,6 +95,7 @@ export default function MenuDrawer({
       </aside>
 
       <SettingsPanel open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <AboutPanel open={aboutOpen} onClose={() => setAboutOpen(false)} />
     </>
   );
 }

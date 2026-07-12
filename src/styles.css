@@ -590,7 +590,7 @@ code {
 }
 
 .modal-panel.is-wide {
-  width: min(96vw, 720px);
+  width: min(96vw, 860px);
 }
 
 .modal-panel-header {
@@ -602,6 +602,37 @@ code {
 
 .modal-panel-header h3 {
   margin: 0;
+}
+
+/* Simple key/value list for the About panel (version, build date). */
+.about-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.about-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.about-row:last-child {
+  border-bottom: none;
+}
+
+.about-row dt {
+  color: var(--muted-text);
+}
+
+.about-row dd {
+  margin: 0;
+  color: var(--text-color);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 960px) {

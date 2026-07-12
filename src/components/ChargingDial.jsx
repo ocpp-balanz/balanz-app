@@ -17,12 +17,15 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
  *
  * When `interactive` is set (direct current-limit control is allowed for
  * this charger/user - see DialComponent), the ring doubles as the control
- * itself: dragging anywhere on it (mouse or touch, via Pointer Events) or
- * using the arrow keys moves a handle dot around the circle and reports the
- * resulting value via onInteractiveChange, the same way a linear slider
- * would - just shaped like the dial instead of a separate control under it.
- * The caller still owns the draft/apply flow (see DialComponent's "Apply
- * limit" button); this component only ever reports a candidate value.
+ * itself: dragging anywhere on it (mouse or touch, via Pointer Events) moves
+ * a handle dot around the circle. onInteractiveChange fires continuously
+ * during the drag (so the ring/handle track the pointer live), while
+ * onInteractiveCommit fires once, with the final value, when the pointer is
+ * released - that's the caller's cue to actually apply the change, rather
+ * than firing a backend call on every intermediate pointermove tick.
+ * Deliberately no keyboard support here: arrow-key stepping would need its
+ * own commit-on-release-equivalent (e.g. a debounce) to avoid applying a
+ * change per keypress, which is more complexity than this control needs.
  *
  * The center of the ring is a small stack of live readings - status/network
  * badges, headline current usage + estimated power, and the offered
@@ -43,9 +46,15 @@ export default function ChargingDial({
   interactive = false,
   interactiveMin = 0,
   onInteractiveChange,
+  onInteractiveCommit,
 }) {
   const svgRef = useRef(null);
   const draggingRef = useRef(false);
+  // Tracks the most recently computed value across a drag so stopDragging()
+  // (a closure captured once, at pointerdown time) can report the *final*
+  // value to onInteractiveCommit - reading a value passed down via props
+  // instead would be stale, since those props only update on next render.
+  const lastValueRef = useRef(null);
 
   const safeMax = Number(max) > 0 ? Number(max) : 0;
   const safeValue = Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -73,6 +82,20 @@ export default function ChargingDial({
     return angle / 360;
   }
 
+  // 0A is a valid set-point (it lets the charger settle into SuspendedEVSE),
+  // but 1-5A isn't - interactiveMin (6A) is a floor everywhere except right
+  // at zero. Snap anything in that dead zone to whichever end is closer,
+  // rather than just clamping up to the floor, so the very top of the ring
+  // still reaches 0 instead of jumping straight to 6.
+  function snapToAllowedValue(rawValue) {
+    const rounded = Math.round(rawValue);
+    const bounded = Math.min(safeMax, Math.max(0, rounded));
+    if (bounded === 0 || bounded >= interactiveMin) {
+      return bounded;
+    }
+    return bounded < interactiveMin / 2 ? 0 : interactiveMin;
+  }
+
   function commitFromPoint(clientX, clientY) {
     if (safeMax <= 0) {
       return;
@@ -81,8 +104,8 @@ export default function ChargingDial({
     if (pointFraction === null) {
       return;
     }
-    const raw = Math.round(pointFraction * safeMax);
-    const clamped = Math.min(safeMax, Math.max(interactiveMin, raw));
+    const clamped = snapToAllowedValue(pointFraction * safeMax);
+    lastValueRef.current = clamped;
     onInteractiveChange?.(clamped);
   }
 
@@ -100,6 +123,9 @@ export default function ChargingDial({
     draggingRef.current = false;
     window.removeEventListener('pointermove', handlePointerMove);
     window.removeEventListener('pointerup', stopDragging);
+    if (lastValueRef.current !== null) {
+      onInteractiveCommit?.(lastValueRef.current);
+    }
   }
 
   function handlePointerDown(event) {
@@ -113,27 +139,6 @@ export default function ChargingDial({
     window.addEventListener('pointerup', stopDragging);
   }
 
-  function handleKeyDown(event) {
-    if (!interactive || safeMax <= 0) {
-      return;
-    }
-    const step = event.shiftKey ? 5 : 1;
-    const current = Math.round(safeValue);
-    if (event.key === 'ArrowUp' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      onInteractiveChange?.(Math.min(safeMax, current + step));
-    } else if (event.key === 'ArrowDown' || event.key === 'ArrowLeft') {
-      event.preventDefault();
-      onInteractiveChange?.(Math.max(interactiveMin, current - step));
-    } else if (event.key === 'Home') {
-      event.preventDefault();
-      onInteractiveChange?.(interactiveMin);
-    } else if (event.key === 'End') {
-      event.preventDefault();
-      onInteractiveChange?.(safeMax);
-    }
-  }
-
   return (
     <div className="charging-dial-wrap">
       <div className={`charging-dial${interactive ? ' is-interactive' : ''}`}>
@@ -143,14 +148,9 @@ export default function ChargingDial({
           viewBox={`0 0 ${SIZE} ${SIZE}`}
           width={SIZE}
           height={SIZE}
-          role={interactive ? 'slider' : 'img'}
-          aria-label={interactive ? 'Max current limit' : 'Charging status dial'}
-          aria-valuemin={interactive ? interactiveMin : undefined}
-          aria-valuemax={interactive ? safeMax : undefined}
-          aria-valuenow={interactive ? Math.round(safeValue) : undefined}
-          tabIndex={interactive ? 0 : undefined}
+          role="img"
+          aria-label={interactive ? 'Max current limit, drag to adjust' : 'Charging status dial'}
           onPointerDown={handlePointerDown}
-          onKeyDown={handleKeyDown}
         >
           <circle className="charging-dial-track" cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} strokeWidth={STROKE} />
           <circle

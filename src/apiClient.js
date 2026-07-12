@@ -534,6 +534,18 @@ class BalanzWebsocketClient {
     });
   }
 
+  // Unlike RemoteStopTransaction, the backend requires an id_tag here - it
+  // has no way to invent one, since a real session normally starts with an
+  // RFID scan at the charger. The caller (the UI's start-charging dialog)
+  // is responsible for asking the admin for a tag rather than guessing one.
+  async remoteStartTransaction({ chargerId, connectorId, idTag }) {
+    return this.call('RemoteStartTransaction', {
+      charger_id: chargerId,
+      connector_id: Number(connectorId) || 1,
+      id_tag: idTag,
+    });
+  }
+
   async setChargePriority({ chargerId, connectorId, priority }) {
     return this.call('SetChargePriority', {
       charger_id: chargerId,
@@ -724,6 +736,10 @@ export async function setTxProfile(payload) {
 
 export async function remoteStopTransaction(payload) {
   return client.remoteStopTransaction(payload);
+}
+
+export async function remoteStartTransaction(payload) {
+  return client.remoteStartTransaction(payload);
 }
 
 export async function setChargePriority(payload) {

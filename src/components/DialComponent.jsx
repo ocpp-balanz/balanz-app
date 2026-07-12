@@ -13,6 +13,10 @@ import './DialStyles.css';
 const ASSUMED_VOLTAGE_V = Number(import.meta.env.VITE_ASSUMED_VOLTAGE_V) || 230;
 const ASSUMED_PHASES = Number(import.meta.env.VITE_ASSUMED_PHASES) || 3;
 
+// Minimum non-zero current the dial can be dragged to - 0A is also allowed
+// (see ChargingDial's snapToAllowedValue), just nothing in between.
+const MIN_DIRECT_CURRENT_A = 6;
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
@@ -64,6 +68,37 @@ function statusTone(status) {
   }
 }
 
+function PlayIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path d="M8 5.5v13l11-6.5z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function StopIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" />
+    </svg>
+  );
+}
+
+// Same path data as @mui/icons-material's QueryStatsIcon, which balanz-ui
+// uses for its own charging-history trigger (see ChargingHistory.tsx) - kept
+// as a plain inline SVG here rather than pulling in the MUI icon package,
+// since this app otherwise has no MUI dependency.
+function QueryStatsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M19.88 18.47c.44-.7.7-1.51.7-2.39 0-2.49-2.01-4.5-4.5-4.5s-4.5 2.01-4.5 4.5 2.01 4.5 4.49 4.5c.88 0 1.7-.26 2.39-.7L21.58 23 23 21.58zm-3.8.11c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5m-.36-8.5c-.74.02-1.45.18-2.1.45l-.55-.83-3.8 6.18-3.01-3.52-3.63 5.81L1 17l5-8 3 3.5L13 6zm2.59.5c-.64-.28-1.33-.45-2.05-.49L21.38 2 23 3.18z"
+      />
+    </svg>
+  );
+}
+
 export default function DialComponent({
   charger,
   loading,
@@ -71,6 +106,7 @@ export default function DialComponent({
   draftMaxCurrent,
   onDraftMaxCurrentChange,
   onApplyMaxCurrent,
+  onStartTransaction,
   onStopTransaction,
   isAllocationGroup,
   userType,
@@ -79,6 +115,8 @@ export default function DialComponent({
   onApplyPriority,
 }) {
   const [graphOpen, setGraphOpen] = useState(false);
+  const [startModalOpen, setStartModalOpen] = useState(false);
+  const [startTagInput, setStartTagInput] = useState('');
 
   const session = charger.session || null;
   const connector = charger.activeConnector || null;
@@ -86,25 +124,31 @@ export default function DialComponent({
 
   const baseline = connector?.offered ?? charger.connMax ?? 16;
   const draftValue = Number(draftMaxCurrent ?? baseline);
-  const hasPendingChange = Number(baseline) !== draftValue;
 
   const priorityBaseline = connector?.priority ?? charger.priority ?? 1;
   const draftPriorityValue = Number(draftPriority ?? priorityBaseline);
   const hasPendingPriorityChange = Number(priorityBaseline) !== draftPriorityValue;
 
   const history = Array.isArray(session?.chargingHistory) ? session.chargingHistory : [];
+  // Graph access isn't Admin-gated (unlike Start/Stop) - anyone who can see
+  // a session with history can view its graph, so this sits in the same
+  // transport row as Play/Stop but is shown independently of isAdmin.
+  const hasGraphAccess = history.length > 0;
 
   const estimatedPowerKw =
     session && session.usageMeterA !== null
       ? (session.usageMeterA * ASSUMED_VOLTAGE_V * ASSUMED_PHASES) / 1000
       : null;
 
+  // Starting/stopping a session (and, separately, adjusting its current
+  // limit) are Admin-only actions - see "Group types & permissions" in the
+  // README and balanz/api.py's API_ALLOW, which doesn't list either
+  // RemoteStartTransaction or RemoteStopTransaction for any other role.
   const canStop = Boolean(session && connector?.transactionId);
   const isAdmin = canControlCharging(userType);
   const canPrioritize = canSetChargePriority(userType);
   // Direct current-limit control only makes sense outside SmartCharging
-  // groups (Balanz's own allocation loop owns the offer there - see
-  // "Group types & permissions" in the README) and only for Admin users.
+  // groups (Balanz's own allocation loop owns the offer there).
   const isDirectControl = canStop && !isAllocationGroup && isAdmin;
 
   const userDisplay = session
@@ -120,10 +164,31 @@ export default function DialComponent({
   // charger name row (see hero-name-row below), not in the dial.
   const badges = [{ label: charger.status || 'Unknown', tone }];
 
-  // While the user is dragging/adjusting the dial to set a new limit, the
-  // ring itself tracks that pending draft value so the handle follows the
-  // drag exactly; otherwise it shows the real, backend-confirmed offer.
+  // While the user is dragging the dial to set a new limit, the ring itself
+  // tracks that pending value so the handle follows the drag exactly;
+  // otherwise it shows the real, backend-confirmed offer.
   const ringValue = isDirectControl ? draftValue : connector?.offered ?? 0;
+
+  const controlHint = isAdmin
+    ? null
+    : canStop
+      ? 'Stopping this session requires an Admin account.'
+      : 'Start a session at the charger, or ask an admin to start one remotely.';
+
+  function openStartModal() {
+    setStartTagInput(charger.chargerId || '');
+    setStartModalOpen(true);
+  }
+
+  function handleStartSubmit(event) {
+    event.preventDefault();
+    const trimmed = startTagInput.trim();
+    if (!trimmed) {
+      return;
+    }
+    onStartTransaction(trimmed);
+    setStartModalOpen(false);
+  }
 
   return (
     <div className="charger-overview">
@@ -165,27 +230,71 @@ export default function DialComponent({
             footerValue={`${formatMetric(connector?.offered, '', 0)}/${formatMetric(charger.connMax, '', 0)}`}
             footerUnit="A"
             interactive={isDirectControl}
-            interactiveMin={6}
+            interactiveMin={MIN_DIRECT_CURRENT_A}
             onInteractiveChange={onDraftMaxCurrentChange}
+            onInteractiveCommit={
+              isDirectControl
+                ? (finalValue) => {
+                    // Skip a no-op apply if the user just tapped/released
+                    // without actually moving away from the current value.
+                    if (Number(finalValue) !== Number(baseline)) {
+                      onApplyMaxCurrent(finalValue);
+                    }
+                  }
+                : undefined
+            }
           />
 
           {isDirectControl ? (
-            <div className="dial-control">
-              <div className="slider-header compact">
-                <span>Max current</span>
-                <output>{draftValue} A</output>
-              </div>
-              <p className="dial-hint">Drag the ring (or use arrow keys) to adjust, then apply.</p>
-              <button
-                className="primary-button dial-apply-button"
-                type="button"
-                onClick={() => onApplyMaxCurrent(draftValue)}
-                disabled={saving || loading || !hasPendingChange}
-              >
-                {saving ? 'Applying...' : 'Apply limit'}
-              </button>
+            <div className="dial-readout">
+              <span>Max current</span>
+              <output>{draftValue} A</output>
             </div>
           ) : null}
+
+          {isAdmin || hasGraphAccess ? (
+            <div className="dial-transport-row">
+              {isAdmin ? (
+                canStop ? (
+                  <button
+                    type="button"
+                    className="icon-button icon-button-stop"
+                    onClick={onStopTransaction}
+                    disabled={saving || loading}
+                    aria-label="Stop charging"
+                    title="Stop charging"
+                  >
+                    <StopIcon />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button icon-button-play"
+                    onClick={openStartModal}
+                    disabled={saving || loading}
+                    aria-label="Start charging"
+                    title="Start charging"
+                  >
+                    <PlayIcon />
+                  </button>
+                )
+              ) : null}
+
+              {hasGraphAccess ? (
+                <button
+                  type="button"
+                  className="icon-button icon-button-graph"
+                  onClick={() => setGraphOpen(true)}
+                  aria-label="View charging graph"
+                  title="View charging graph"
+                >
+                  <QueryStatsIcon />
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {controlHint ? <p className="dial-hint">{controlHint}</p> : null}
         </div>
 
         {session ? (
@@ -213,90 +322,109 @@ export default function DialComponent({
           <div className="inline-state">No active session on this charger.</div>
         )}
 
-        <div className="overview-actions">
-          {!canStop ? (
-            <div className="inline-state">Start a session at the charger to enable controls.</div>
-          ) : isAllocationGroup ? (
+        {isAllocationGroup && canStop ? (
+          <div className="overview-actions">
             <div className="control-panel">
               {canPrioritize ? (
-                <div className="stepper-field">
-                  <span className="stepper-label">Session priority</span>
-                  <div className="stepper-control">
+                <>
+                  <div className="stepper-field">
+                    <span className="stepper-label">Session priority</span>
+                    <div className="stepper-control">
+                      <button
+                        type="button"
+                        className="stepper-button"
+                        onClick={() => onDraftPriorityChange(Math.max(0, draftPriorityValue - 1))}
+                        disabled={saving || loading || draftPriorityValue <= 0}
+                        aria-label="Decrease session priority"
+                      >
+                        −
+                      </button>
+                      <output className="stepper-value">{draftPriorityValue}</output>
+                      <button
+                        type="button"
+                        className="stepper-button"
+                        onClick={() => onDraftPriorityChange(Math.min(10, draftPriorityValue + 1))}
+                        disabled={saving || loading || draftPriorityValue >= 10}
+                        aria-label="Increase session priority"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="action-row">
                     <button
+                      className="primary-button"
                       type="button"
-                      className="stepper-button"
-                      onClick={() => onDraftPriorityChange(Math.max(0, draftPriorityValue - 1))}
-                      disabled={saving || loading || draftPriorityValue <= 0}
-                      aria-label="Decrease session priority"
+                      onClick={() => onApplyPriority(draftPriorityValue)}
+                      disabled={saving || loading || !hasPendingPriorityChange}
                     >
-                      −
-                    </button>
-                    <output className="stepper-value">{draftPriorityValue}</output>
-                    <button
-                      type="button"
-                      className="stepper-button"
-                      onClick={() => onDraftPriorityChange(Math.min(10, draftPriorityValue + 1))}
-                      disabled={saving || loading || draftPriorityValue >= 10}
-                      aria-label="Increase session priority"
-                    >
-                      +
+                      {saving ? 'Applying...' : 'Apply priority'}
                     </button>
                   </div>
-                </div>
-              ) : null}
-
-              <div className="action-row">
-                {canPrioritize ? (
-                  <button
-                    className="primary-button"
-                    type="button"
-                    onClick={() => onApplyPriority(draftPriorityValue)}
-                    disabled={saving || loading || !hasPendingPriorityChange}
-                  >
-                    {saving ? 'Applying...' : 'Apply priority'}
-                  </button>
-                ) : null}
-                {isAdmin ? (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={onStopTransaction}
-                    disabled={saving || loading}
-                  >
-                    Stop charging
-                  </button>
-                ) : null}
-                {!canPrioritize && !isAdmin ? (
-                  <span className="inline-state">Your account does not have permission to change this session.</span>
-                ) : null}
-              </div>
+                </>
+              ) : (
+                <span className="inline-state">Your account does not have permission to change this session's priority.</span>
+              )}
             </div>
-          ) : isAdmin ? (
-            <div className="action-row">
-              <button
-                className="secondary-button"
-                type="button"
-                onClick={onStopTransaction}
-                disabled={saving || loading}
-              >
-                Stop charging
+          </div>
+        ) : null}
+
+      </section>
+
+      {startModalOpen ? (
+        <>
+          <button
+            type="button"
+            className="menu-backdrop is-open"
+            aria-label="Close"
+            onClick={() => setStartModalOpen(false)}
+          />
+          <div className="modal-panel panel">
+            <div className="modal-panel-header">
+              <div>
+                <p className="section-kicker">Remote start</p>
+                <h3>Start charging</h3>
+              </div>
+              <button className="ghost-button" type="button" onClick={() => setStartModalOpen(false)}>
+                Close
               </button>
             </div>
-          ) : (
-            <div className="inline-state">Your account does not have permission to control this session.</div>
-          )}
-        </div>
 
-        <div className="graph-trigger-row">
-          {history.length > 0 ? (
-            <button className="secondary-button" type="button" onClick={() => setGraphOpen(true)}>
-              View charging graph
-            </button>
-          ) : (
-            <span className="inline-state">No recent charging history available yet.</span>
-          )}
-        </div>
-      </section>
+            <form className="auth-form" onSubmit={handleStartSubmit}>
+              <label className="field">
+                <span>ID tag</span>
+                <input
+                  type="text"
+                  value={startTagInput}
+                  onChange={(event) => setStartTagInput(event.target.value)}
+                  placeholder="RFID or virtual tag id"
+                  autoComplete="off"
+                  required
+                />
+              </label>
+
+              <p className="subtle">
+                A real session normally starts with an RFID scan at the charger - a remote start needs an id tag
+                supplied here instead. It defaults to the charger's own id, the same convention this app already
+                uses to detect and label "Free vending" sessions.
+              </p>
+
+              <div className="action-row">
+                <button className="primary-button" type="submit" disabled={saving || loading}>
+                  {saving ? 'Starting...' : 'Start charging'}
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={() => setStartModalOpen(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      ) : null}
 
       {graphOpen ? (
         <>
@@ -311,7 +439,7 @@ export default function DialComponent({
                 Close
               </button>
             </div>
-            <ChargingHistoryChart history={history} height={420} />
+            <ChargingHistoryChart history={history} height={260} />
           </div>
         </>
       ) : null}

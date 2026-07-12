@@ -22,35 +22,77 @@
   gap: 0.85rem;
 }
 
-.dial-control {
-  width: 220px;
-  display: grid;
+/* Small readout of the pending drag value while adjusting the max current -
+   no button/apply step needed anymore, since the dial applies on release
+   (see ChargingDial's onInteractiveCommit). */
+.dial-readout {
+  display: flex;
+  align-items: center;
   gap: 0.5rem;
-  justify-items: center;
-  text-align: center;
+  color: var(--text-color);
+  font-size: 0.82rem;
+}
+
+.dial-readout output {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 .dial-hint {
   margin: 0;
   font-size: 0.78rem;
   color: var(--muted-text);
+  text-align: center;
 }
 
-.dial-apply-button {
-  width: 100%;
-  padding: 0.55rem 0.75rem;
-  font-size: 0.85rem;
+.dial-transport-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.icon-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+}
+
+.icon-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.icon-button-play {
+  background: var(--success);
+}
+
+.icon-button-stop {
+  background: var(--error);
+}
+
+/* Charging-graph trigger, styled like Play/Stop but in a neutral/info color
+   since it's a view action rather than a control one - and unlike Play/Stop,
+   it isn't Admin-gated (see hasGraphAccess in DialComponent.jsx). */
+.icon-button-graph {
+  background: var(--info);
 }
 
 .overview-actions {
   display: grid;
-  border-top: 1px solid var(--border-color);
-  padding-top: 1rem;
-}
-
-.graph-trigger-row {
-  display: flex;
-  justify-content: center;
   border-top: 1px solid var(--border-color);
   padding-top: 1rem;
 }
@@ -336,9 +378,9 @@
     gap: 0.6rem;
   }
 
-  .dial-control {
-    width: 100%;
-    max-width: 220px;
+  .icon-button {
+    width: 48px;
+    height: 48px;
   }
 
   .hero-meta {

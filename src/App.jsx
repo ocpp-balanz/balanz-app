@@ -13,6 +13,7 @@ import {
   isAuthError,
   login as loginRequest,
   logout as logoutRequest,
+  remoteStartTransaction,
   remoteStopTransaction,
   resumeStoredLogin,
   setChargePriority,
@@ -289,7 +290,7 @@ export default function App() {
 
   // Tracks the latest selectedChargerId for scheduleFollowUpRefresh below,
   // since a plain closure over the state value would go stale if the user
-  // switches chargers before the 10s timer fires.
+  // switches chargers before the 5s timer fires.
   const selectedChargerIdRef = useRef(selectedChargerId);
   useEffect(() => {
     selectedChargerIdRef.current = selectedChargerId;
@@ -299,13 +300,13 @@ export default function App() {
   // needs a moment to actually apply it - the immediate refresh right after
   // the request often still shows the pre-change state. Rather than wait for
   // the next full interval tick (up to REFRESH_INTERVAL_MS later), schedule
-  // one extra quiet refresh 10s out to pick up the settled state promptly.
+  // one extra quiet refresh 5s out to pick up the settled state promptly.
   function scheduleFollowUpRefresh(chargerId) {
     window.setTimeout(() => {
       if (selectedChargerIdRef.current === chargerId) {
         void loadChargerDetails(chargerId, { quiet: true });
       }
-    }, 10000);
+    }, 5000);
   }
 
   async function handleLogin(credentials) {
@@ -360,7 +361,10 @@ export default function App() {
         limit: nextCurrent,
       });
       setNotice(`Updated current limit to ${nextCurrent} A.`);
-      setDetailRefreshToken((value) => value + 1);
+      // Deliberately no immediate (non-quiet) refresh here - the backend
+      // needs a moment to apply the change, so an immediate reload tends to
+      // just redisplay the pre-change state. scheduleFollowUpRefresh below
+      // is the only refresh triggered by this action.
       scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
@@ -388,7 +392,42 @@ export default function App() {
         priority: nextPriority,
       });
       setNotice(`Updated session priority to ${nextPriority}.`);
-      setDetailRefreshToken((value) => value + 1);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      setDetailError(formatError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Unlike stopping, remote-starting a session needs an id_tag the backend
+  // can't invent itself (a real session normally starts with an RFID scan).
+  // The caller is DialComponent's start-charging dialog, which prompts the
+  // admin for a tag rather than us guessing one silently.
+  async function handleStartTransaction(idTag) {
+    const connector = selectedCharger?.activeConnector || selectedCharger?.connectors?.[0];
+    const trimmedTag = String(idTag || '').trim();
+    if (!selectedCharger || !connector) {
+      setDetailError('No connector is available to start a session on.');
+      return;
+    }
+    if (!trimmedTag) {
+      setDetailError('An ID tag is required to start a session.');
+      return;
+    }
+
+    setSaving(true);
+    setDetailError('');
+    setNotice('');
+
+    try {
+      await remoteStartTransaction({
+        chargerId: selectedCharger.chargerId,
+        connectorId: connector.connectorId,
+        idTag: trimmedTag,
+      });
+      setNotice('Start request sent.');
       scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
@@ -415,7 +454,6 @@ export default function App() {
         transactionId: connector.transactionId,
       });
       setNotice('Stop request sent.');
-      setDetailRefreshToken((value) => value + 1);
       scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
@@ -507,6 +545,7 @@ export default function App() {
               draftMaxCurrent={draftMaxCurrent}
               onDraftMaxCurrentChange={setDraftMaxCurrent}
               onApplyMaxCurrent={handleApplyCurrentLimit}
+              onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
               isAllocationGroup={isAllocationGroup}
               userType={userType}

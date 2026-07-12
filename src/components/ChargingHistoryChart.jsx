@@ -1,19 +1,15 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import './ChargingHistoryChart.css';
 
-// SVG text scales with the viewBox, not with CSS pixels: if VIEW_WIDTH is
-// much larger than the box actually rendered on screen, the fixed font-size
-// below (see .chart-axis-label) ends up shrunk by that same ratio and
-// becomes illegible - which is what was happening at 640 on a ~340px-wide
-// phone screen (a ~0.5x shrink). Using a width close to a typical phone's
-// rendered chart width keeps axis text close to its nominal size there,
-// while still reading fine when scaled up on a wider desktop modal.
-const VIEW_WIDTH = 340;
 const PAD_LEFT = 34;
 const PAD_RIGHT = 10;
 const PAD_TOP = 14;
 const PAD_BOTTOM = 28;
+
+// Fallback viewBox width used only for the very first render, before the
+// ResizeObserver below reports the container's real size.
+const INITIAL_VIEW_WIDTH = 340;
 
 /**
  * Step chart of offered vs. used current (A) over time, built from a
@@ -24,13 +20,45 @@ const PAD_BOTTOM = 28;
  * session lookup later - no fetching or session-specific logic lives here.
  */
 export default function ChargingHistoryChart({ history, height = 220, unit = 'A' }) {
+  const containerRef = useRef(null);
+  // The viewBox width is kept equal to the container's actual rendered
+  // pixel width (via ResizeObserver) rather than a fixed guess. SVG text
+  // scales with the ratio of rendered size to viewBox size, so any mismatch
+  // there shows up as text that's too small (viewBox too big for a narrow
+  // phone) or - as reported from the wide desktop modal - way too large,
+  // with the chart itself stretched into a tall, mostly-empty column
+  // (this used to also drive the SVG's on-screen *height* via a CSS
+  // `height: auto` aspect-ratio lock; that's removed too, in
+  // ChargingHistoryChart.css, so height is simply whatever this component
+  // is asked to render at, independent of width).
+  const [viewWidth, setViewWidth] = useState(INITIAL_VIEW_WIDTH);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') {
+      return undefined;
+    }
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect?.width;
+      if (width && width > 0) {
+        setViewWidth(width);
+      }
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const points = normalizeHistory(history);
 
   if (points.length < 2) {
-    return <div className="inline-state">Not enough data yet to plot a graph.</div>;
+    return (
+      <div ref={containerRef} className="inline-state">
+        Not enough data yet to plot a graph.
+      </div>
+    );
   }
 
-  const plotWidth = VIEW_WIDTH - PAD_LEFT - PAD_RIGHT;
+  const plotWidth = viewWidth - PAD_LEFT - PAD_RIGHT;
   const plotHeight = height - PAD_TOP - PAD_BOTTOM;
 
   const minTs = points[0].timestamp;
@@ -53,8 +81,8 @@ export default function ChargingHistoryChart({ history, height = 220, unit = 'A'
   const xTicks = buildXTicks(points, xScale);
 
   return (
-    <div className="charging-history-chart">
-      <svg viewBox={`0 0 ${VIEW_WIDTH} ${height}`} width="100%" height={height} preserveAspectRatio="xMidYMid meet">
+    <div className="charging-history-chart" ref={containerRef}>
+      <svg viewBox={`0 0 ${viewWidth} ${height}`} width="100%" height={height} preserveAspectRatio="xMidYMid meet">
         {yTicks.map((tick) => (
           <g key={`y-${tick}`}>
             <line

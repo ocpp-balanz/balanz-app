@@ -6,7 +6,11 @@
 .charging-history-chart svg {
   display: block;
   width: 100%;
-  height: auto;
+  /* Deliberately no height: auto here - that used to lock the SVG's
+     on-screen height to its viewBox aspect ratio, so a wide desktop modal
+     produced a very tall, mostly-empty, scrolling chart. Height now just
+     comes from the height="..." attribute the chart is rendered with,
+     independent of width (see ChargingHistoryChart.jsx). */
 }
 
 .chart-gridline {
