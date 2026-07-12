@@ -43,7 +43,7 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 ## Workflow
 - Update the README whenever setup or runtime steps change.
 - Keep `package.json` scripts aligned with the actual web and Capacitor workflow.
-- Keep the `Dockerfile` / `docker-compose.yml` / `nginx.conf` aligned with the
+- Keep the `Dockerfile` / `docker-compose.yml` / `nginx.conf.template` aligned with the
   actual build output (`dist/`) if the build tooling or output path changes -
   this is the served path for devices (e.g. iOS Safari) that can't run the
   Vite dev server or a Capacitor build directly.

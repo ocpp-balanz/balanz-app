@@ -265,6 +265,43 @@ around. This setup doesn't provide TLS itself; put a reverse proxy in front
 if you need `https://` for the app itself (not required for this app's own
 functionality).
 
+### Reverse proxying `/api` (keeping the OCPP server off the public internet)
+
+By default the app talks directly to whatever `VITE_API_BASE_URL` points at
+— fine for a Balanz server you're already comfortable exposing, but not if
+your organization wants to keep the OCPP server itself internal-only. Since
+all backend traffic already goes through one path (`/api`, see
+`src/apiClient.js`), the container's own nginx can proxy that path to the
+real Balanz server instead of the browser talking to it directly:
+
+```
+Browser (anywhere) --https/wss--> this container (public) --ws (LAN only)--> Balanz OCPP server (internal-only)
+```
+
+To use this mode:
+
+1. Set `VITE_API_BASE_URL` to this app's *own* public address (not
+   Balanz's) — e.g. `https://ocpp.example.com`, the same address the app
+   itself is served from. The app then calls same-origin `/api`.
+2. Set `BALANZ_UPSTREAM` to the real Balanz server's `host:port` as reached
+   from *inside* the container (a LAN address, e.g. `192.168.1.50:9111`) —
+   this stays off the public internet entirely; only the container itself
+   needs to be reachable from outside.
+
+```bash
+HOST_PORT=8081 \
+VITE_API_BASE_URL=https://ocpp.example.com \
+BALANZ_UPSTREAM=192.168.1.50:9111 \
+docker compose up --build
+```
+
+The proxying is defined in [`nginx.conf.template`](./nginx.conf.template)
+(templated so `${BALANZ_UPSTREAM}` is substituted at container start by
+nginx's own `envsubst` entrypoint step — see comments in that file). Leaving
+`BALANZ_UPSTREAM` unset and `VITE_API_BASE_URL` pointed directly at Balanz
+(the default, as in the section above) simply leaves this location block
+unused — the two modes coexist without conflicting.
+
 ## API contract
 
 The app authenticates via the `Login` command, sending `token` as the
@@ -294,7 +331,7 @@ full mapping, normalization, and the `USER_TYPES` / `canControlCharging` /
 ```
 Dockerfile                        Multi-stage build: npm build -> nginx serving dist/ (see "Docker" above)
 docker-compose.yml                Builds and runs the Dockerfile, publishing nginx on HOST_PORT (default 8081)
-nginx.conf                        SPA-friendly nginx config (falls back to index.html) used by the Dockerfile
+nginx.conf.template                SPA fallback + optional /api reverse proxy (see "Docker" above), templated via envsubst at container start
 src/
   apiClient.js                    Centralized WebSocket API client (auth, calls, normalization, roles)
   App.jsx                         Top-level state/routing (dashboard vs. groups view)
