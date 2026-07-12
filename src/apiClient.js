@@ -191,6 +191,15 @@ function normalizeTransaction(transaction = {}, chargerId = '') {
   const idTag = transaction.id_tag ?? null;
   const userName = transaction.user_name ?? null;
 
+  // energy_meter is the meter's cumulative reading, not the energy used this
+  // session - meter_start is usually 0 (the meter resets at session start),
+  // but where it isn't, energy_meter alone overstates what this session
+  // actually delivered. Subtract it so "energy charged" is always the
+  // session's own delta, whether or not meter_start happens to be 0.
+  // Clamped to 0 as a safety net against a corrupt/rolled-over meter_start.
+  const energyKwh =
+    energyMeterWh !== null ? Math.max(0, (energyMeterWh - (meterStartWh ?? 0)) / 1000) : null;
+
   return {
     idTag,
     userName,
@@ -198,7 +207,7 @@ function normalizeTransaction(transaction = {}, chargerId = '') {
     startTime: transaction.start_time ?? null,
     meterStartWh,
     energyMeterWh,
-    energyKwh: energyMeterWh !== null ? energyMeterWh / 1000 : null,
+    energyKwh,
     usageMeterA: toNullableNumber(transaction.usage_meter),
     chargingHistory,
     raw: transaction,

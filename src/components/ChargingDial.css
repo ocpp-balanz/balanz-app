@@ -6,8 +6,8 @@
 
 .charging-dial {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: 220px;
+  height: 220px;
   display: grid;
   place-items: center;
 }
@@ -15,6 +15,15 @@
 .charging-dial-svg {
   display: block;
   filter: drop-shadow(0 1px 2px rgba(16, 24, 40, 0.06));
+}
+
+.charging-dial.is-interactive .charging-dial-svg {
+  cursor: grab;
+  touch-action: none;
+}
+
+.charging-dial.is-interactive .charging-dial-svg:active {
+  cursor: grabbing;
 }
 
 .charging-dial-track {
@@ -54,17 +63,100 @@
   stroke: var(--track-strong-color);
 }
 
+/* The draggable handle - a white/panel-colored dot with a colored ring so
+   it reads clearly against the progress arc underneath it, echoing the
+   handle from the reference thermostat-style dial this was modeled on. */
+.charging-dial-handle {
+  fill: var(--panel);
+  stroke: var(--accent);
+  stroke-width: 3;
+  filter: drop-shadow(0 1px 3px rgba(16, 24, 40, 0.3));
+}
+
 .charging-dial-center {
   position: absolute;
   inset: 0;
   display: grid;
-  place-items: center;
+  justify-items: center;
+  align-content: center;
+  gap: 0.3rem;
   text-align: center;
-  padding: 0 1.5rem;
+  padding: 0 1.6rem;
+  /* This overlay spans the whole dial (inset: 0), not just the visible text
+     in its middle, so without this it sits on top of the SVG and swallows
+     every pointer event aimed at the ring underneath - including drags on
+     the track/progress arc, which is what actually made the interactive
+     dial silently not respond to dragging. There's nothing clickable in
+     here, so let all pointer events pass through to the SVG. */
+  pointer-events: none;
+}
+
+.charging-dial-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 0.1rem;
+}
+
+.charging-dial-badge {
+  display: inline-block;
+  max-width: 100%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  padding: 0.26rem 0.6rem;
+  border-radius: 999px;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.charging-dial-badge.tone-charging {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.charging-dial-badge.tone-available {
+  color: var(--info);
+  background: var(--info-bg);
+}
+
+.charging-dial-badge.tone-preparing {
+  color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.charging-dial-badge.tone-finishing,
+.charging-dial-badge.tone-suspended {
+  color: var(--secondary);
+  background: var(--secondary-bg);
+}
+
+.charging-dial-badge.tone-error {
+  color: var(--error);
+  background: var(--error-bg);
+}
+
+.charging-dial-badge.tone-neutral {
+  color: var(--muted-text);
+  background: var(--track-color);
+}
+
+.charging-dial-badge.tone-online {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.charging-dial-badge.tone-offline {
+  color: var(--muted-text);
+  background: var(--track-color);
 }
 
 .charging-dial-value {
-  font-size: 2.5rem;
+  font-size: 2rem;
   font-weight: 700;
   color: var(--text-color);
   letter-spacing: -0.02em;
@@ -73,71 +165,49 @@
 }
 
 .charging-dial-unit {
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   color: var(--muted-text);
-  margin-left: 0.25rem;
+  margin-left: 0.2rem;
 }
 
-.charging-dial-status {
-  display: inline-block;
-  max-width: 100%;
+.charging-dial-secondary {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text-color);
+  font-variant-numeric: tabular-nums;
+}
+
+.charging-dial-secondary-unit {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted-text);
+  margin-left: 0.15rem;
+}
+
+.charging-dial-footer {
   font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  padding: 0.3rem 0.85rem;
-  border-radius: 999px;
-  line-height: 1.2;
-  text-align: center;
-  white-space: nowrap;
-}
-
-.charging-dial-status.tone-charging {
-  color: var(--success);
-  background: var(--success-bg);
-}
-
-.charging-dial-status.tone-available {
-  color: var(--info);
-  background: var(--info-bg);
-}
-
-.charging-dial-status.tone-preparing {
-  color: var(--warning);
-  background: var(--warning-bg);
-}
-
-.charging-dial-status.tone-finishing,
-.charging-dial-status.tone-suspended {
-  color: var(--secondary);
-  background: var(--secondary-bg);
-}
-
-.charging-dial-status.tone-error {
-  color: var(--error);
-  background: var(--error-bg);
-}
-
-.charging-dial-status.tone-neutral {
   color: var(--muted-text);
-  background: var(--track-color);
+  font-variant-numeric: tabular-nums;
 }
 
-.charging-dial-caption {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted-text);
-  text-align: center;
+.charging-dial-footer-label {
+  font-weight: 600;
+  margin-right: 0.3rem;
 }
 
-/* Shrink the ring on phones so it (plus its status pill, caption, and any
-   slider beneath it) doesn't dominate the screen - the goal is to fit the
-   whole overview card, not just the ring, without scrolling. */
+.charging-dial-footer-unit {
+  margin-left: 0.15rem;
+}
+
+/* Shrink the ring on phones - still noticeably larger than before now that
+   it no longer has to sit side-by-side with the session stats (those moved
+   to their own row below the whole dial section). */
 @media (max-width: 640px) {
   .charging-dial,
   .charging-dial-svg {
-    width: 128px;
-    height: 128px;
+    width: 190px;
+    height: 190px;
   }
 
   .charging-dial-wrap {
@@ -145,23 +215,28 @@
   }
 
   .charging-dial-center {
-    padding: 0 1rem;
+    padding: 0 1.2rem;
+    gap: 0.2rem;
+  }
+
+  .charging-dial-badge {
+    font-size: 0.62rem;
+    padding: 0.2rem 0.5rem;
   }
 
   .charging-dial-value {
-    font-size: 1.7rem;
+    font-size: 1.6rem;
   }
 
   .charging-dial-unit {
-    font-size: 0.85rem;
-  }
-
-  .charging-dial-status {
-    font-size: 0.72rem;
-    padding: 0.24rem 0.65rem;
-  }
-
-  .charging-dial-caption {
     font-size: 0.78rem;
+  }
+
+  .charging-dial-secondary {
+    font-size: 0.88rem;
+  }
+
+  .charging-dial-footer {
+    font-size: 0.68rem;
   }
 }

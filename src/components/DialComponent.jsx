@@ -87,7 +87,6 @@ export default function DialComponent({
   const baseline = connector?.offered ?? charger.connMax ?? 16;
   const draftValue = Number(draftMaxCurrent ?? baseline);
   const hasPendingChange = Number(baseline) !== draftValue;
-  const sliderMax = Math.max(32, charger.connMax || 0, draftValue);
 
   const priorityBaseline = connector?.priority ?? charger.priority ?? 1;
   const draftPriorityValue = Number(draftPriority ?? priorityBaseline);
@@ -103,6 +102,10 @@ export default function DialComponent({
   const canStop = Boolean(session && connector?.transactionId);
   const isAdmin = canControlCharging(userType);
   const canPrioritize = canSetChargePriority(userType);
+  // Direct current-limit control only makes sense outside SmartCharging
+  // groups (Balanz's own allocation loop owns the offer there - see
+  // "Group types & permissions" in the README) and only for Admin users.
+  const isDirectControl = canStop && !isAllocationGroup && isAdmin;
 
   const userDisplay = session
     ? session.isFreeVending
@@ -111,6 +114,16 @@ export default function DialComponent({
         ? session.userName
         : session.idTag || '--'
     : '--';
+
+  // Charger/connector status, shown as a small colored pill inside the dial
+  // (like a thermostat's mode pill). Network link status stays up on the
+  // charger name row (see hero-name-row below), not in the dial.
+  const badges = [{ label: charger.status || 'Unknown', tone }];
+
+  // While the user is dragging/adjusting the dial to set a new limit, the
+  // ring itself tracks that pending draft value so the handle follows the
+  // drag exactly; otherwise it shows the real, backend-confirmed offer.
+  const ringValue = isDirectControl ? draftValue : connector?.offered ?? 0;
 
   return (
     <div className="charger-overview">
@@ -138,87 +151,67 @@ export default function DialComponent({
           </div>
         </div>
 
-        <div className="overview-main">
-          <div className="dial-column">
-            <ChargingDial
-              value={connector?.offered ?? 0}
-              max={charger.connMax}
-              tone={tone}
-              statusLabel={charger.status}
-              subLabel={`of ${formatMetric(charger.connMax, ' A')} max`}
-            />
+        <div className="dial-section">
+          <ChargingDial
+            value={ringValue}
+            max={charger.connMax}
+            tone={tone}
+            badges={badges}
+            primaryValue={formatMetric(session?.usageMeterA, '', 1)}
+            primaryUnit="A"
+            secondaryValue={session ? formatMetric(estimatedPowerKw, '', 1) : null}
+            secondaryUnit="kW"
+            footerLabel="Offered"
+            footerValue={`${formatMetric(connector?.offered, '', 0)}/${formatMetric(charger.connMax, '', 0)}`}
+            footerUnit="A"
+            interactive={isDirectControl}
+            interactiveMin={6}
+            onInteractiveChange={onDraftMaxCurrentChange}
+          />
 
-            {canStop && !isAllocationGroup && isAdmin ? (
-              <div className="dial-control">
-                <div className="slider-header compact">
-                  <span>Max current</span>
-                  <output>{draftValue} A</output>
-                </div>
-                <input
-                  type="range"
-                  min="6"
-                  max={sliderMax}
-                  step="1"
-                  value={draftValue}
-                  onChange={(event) => onDraftMaxCurrentChange(Number(event.target.value))}
-                />
-                <button
-                  className="primary-button dial-apply-button"
-                  type="button"
-                  onClick={() => onApplyMaxCurrent(draftValue)}
-                  disabled={saving || loading || !hasPendingChange}
-                >
-                  {saving ? 'Applying...' : 'Apply limit'}
-                </button>
+          {isDirectControl ? (
+            <div className="dial-control">
+              <div className="slider-header compact">
+                <span>Max current</span>
+                <output>{draftValue} A</output>
               </div>
-            ) : null}
-          </div>
-
-          <div className="overview-stats">
-            {session ? (
-              <div className="session-grid">
-                <article className="metric-card">
-                  <span className="metric-label">Session start</span>
-                  <strong>{formatTimestamp(session.startTime)}</strong>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-label">Energy charged</span>
-                  <strong>{formatMetric(session.energyKwh, ' kWh', 2)}</strong>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-label">Power (est.)</span>
-                  <strong>{formatMetric(estimatedPowerKw, ' kW', 1)}</strong>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-label">Current</span>
-                  <strong>{formatMetric(session.usageMeterA, ' A', 1)}</strong>
-                </article>
-                <article className="metric-card">
-                  <span className="metric-label">User</span>
-                  {session.isFreeVending ? (
-                    <strong>
-                      <span className="free-vending-badge">Free vending</span>
-                    </strong>
-                  ) : (
-                    <strong>{userDisplay}</strong>
-                  )}
-                </article>
-                <article className="metric-card">
-                  <span className="metric-label">Meter start</span>
-                  <strong>
-                    {formatMetric(
-                      session.meterStartWh !== null ? session.meterStartWh / 1000 : null,
-                      ' kWh',
-                      2,
-                    )}
-                  </strong>
-                </article>
-              </div>
-            ) : (
-              <div className="inline-state">No active session on this charger.</div>
-            )}
-          </div>
+              <p className="dial-hint">Drag the ring (or use arrow keys) to adjust, then apply.</p>
+              <button
+                className="primary-button dial-apply-button"
+                type="button"
+                onClick={() => onApplyMaxCurrent(draftValue)}
+                disabled={saving || loading || !hasPendingChange}
+              >
+                {saving ? 'Applying...' : 'Apply limit'}
+              </button>
+            </div>
+          ) : null}
         </div>
+
+        {session ? (
+          <div className="session-summary-grid">
+            <article className="metric-card">
+              <span className="metric-label">Session start</span>
+              <strong>{formatTimestamp(session.startTime)}</strong>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">Energy charged</span>
+              <strong>{formatMetric(session.energyKwh, ' kWh', 2)}</strong>
+            </article>
+            <article className="metric-card">
+              <span className="metric-label">User</span>
+              {session.isFreeVending ? (
+                <strong>
+                  <span className="free-vending-badge">Free vending</span>
+                </strong>
+              ) : (
+                <strong>{userDisplay}</strong>
+              )}
+            </article>
+          </div>
+        ) : (
+          <div className="inline-state">No active session on this charger.</div>
+        )}
 
         <div className="overview-actions">
           {!canStop ? (
@@ -226,20 +219,30 @@ export default function DialComponent({
           ) : isAllocationGroup ? (
             <div className="control-panel">
               {canPrioritize ? (
-                <label className="slider-field">
-                  <div className="slider-header">
-                    <span>Session priority</span>
-                    <output>{draftPriorityValue}</output>
+                <div className="stepper-field">
+                  <span className="stepper-label">Session priority</span>
+                  <div className="stepper-control">
+                    <button
+                      type="button"
+                      className="stepper-button"
+                      onClick={() => onDraftPriorityChange(Math.max(0, draftPriorityValue - 1))}
+                      disabled={saving || loading || draftPriorityValue <= 0}
+                      aria-label="Decrease session priority"
+                    >
+                      −
+                    </button>
+                    <output className="stepper-value">{draftPriorityValue}</output>
+                    <button
+                      type="button"
+                      className="stepper-button"
+                      onClick={() => onDraftPriorityChange(Math.min(10, draftPriorityValue + 1))}
+                      disabled={saving || loading || draftPriorityValue >= 10}
+                      aria-label="Increase session priority"
+                    >
+                      +
+                    </button>
                   </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="10"
-                    step="1"
-                    value={draftPriorityValue}
-                    onChange={(event) => onDraftPriorityChange(Number(event.target.value))}
-                  />
-                </label>
+                </div>
               ) : null}
 
               <div className="action-row">

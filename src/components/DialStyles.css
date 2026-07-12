@@ -16,44 +16,30 @@
   gap: 1.25rem;
 }
 
-.overview-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.75rem;
-  flex-wrap: wrap;
-}
-
-.dial-column {
+.dial-section {
   display: grid;
   justify-items: center;
   gap: 0.85rem;
-  flex-shrink: 0;
 }
 
 .dial-control {
-  width: 200px;
+  width: 220px;
   display: grid;
   gap: 0.5rem;
+  justify-items: center;
+  text-align: center;
 }
 
-.dial-control input[type='range'] {
-  width: 100%;
-  accent-color: var(--accent);
-}
-
-.slider-header.compact {
-  font-size: 0.82rem;
+.dial-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted-text);
 }
 
 .dial-apply-button {
   width: 100%;
   padding: 0.55rem 0.75rem;
   font-size: 0.85rem;
-}
-
-.overview-stats {
-  flex: 1 1 260px;
-  min-width: 260px;
 }
 
 .overview-actions {
@@ -160,9 +146,9 @@
   color: var(--info);
 }
 
-.session-grid {
+.session-summary-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 0.6rem;
 }
 
@@ -190,11 +176,7 @@
 .control-panel {
   display: grid;
   gap: 1rem;
-}
-
-.slider-field {
-  display: grid;
-  gap: 0.65rem;
+  justify-items: center;
 }
 
 .slider-header {
@@ -202,7 +184,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  width: 100%;
   color: var(--text-color);
+}
+
+.slider-header.compact {
+  font-size: 0.82rem;
 }
 
 .slider-header output {
@@ -210,15 +197,65 @@
   font-weight: 700;
 }
 
-.slider-field input[type='range'] {
-  width: 100%;
-  accent-color: var(--accent);
+/* Session priority stepper: a plain value with tick up/down buttons,
+   replacing the old 0-10 range slider - simpler to operate precisely on a
+   phone than dragging a thin slider track. */
+.stepper-field {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+}
+
+.stepper-label {
+  color: var(--text-color);
+  font-weight: 600;
+}
+
+.stepper-control {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.stepper-button {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--panel-alt);
+  color: var(--text-color);
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.stepper-button:hover {
+  transform: translateY(-1px);
+}
+
+.stepper-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.stepper-value {
+  min-width: 2.5rem;
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-color);
 }
 
 .action-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+  justify-content: center;
 }
 
 .primary-button,
@@ -259,10 +296,9 @@
   transform: none;
 }
 
-/* Phones: pack everything (name, badges, dial, controls, and all six
-   metrics) into one screen, no scrolling, by shrinking paddings/fonts and
-   keeping the dial and metrics side-by-side instead of stacked - stacking
-   them roughly doubles the vertical space this section needs. */
+/* Phones: shrink paddings/fonts to keep the (now taller, stacked) overview
+   card reasonably compact - the dial itself already shrinks via its own
+   ChargingDial.css media query. */
 @media (max-width: 640px) {
   .section-card {
     padding: 0.8rem 0.9rem;
@@ -296,50 +332,13 @@
     font-size: 0.76rem;
   }
 
-  .overview-main {
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    gap: 0.9rem;
-  }
-
-  .dial-column {
-    gap: 0.5rem;
+  .dial-section {
+    gap: 0.6rem;
   }
 
   .dial-control {
-    width: 128px;
-    gap: 0.35rem;
-  }
-
-  .slider-header.compact {
-    font-size: 0.72rem;
-  }
-
-  .dial-apply-button {
-    padding: 0.45rem 0.6rem;
-    font-size: 0.76rem;
-  }
-
-  .overview-stats {
-    flex: 1 1 auto;
-    min-width: 0;
-  }
-
-  .session-grid {
-    gap: 0.4rem;
-  }
-
-  .metric-card {
-    padding: 0.45rem 0.55rem;
-    gap: 0.15rem;
-  }
-
-  .metric-label {
-    font-size: 0.64rem;
-  }
-
-  .metric-card strong {
-    font-size: 0.88rem;
+    width: 100%;
+    max-width: 220px;
   }
 
   .hero-meta {
@@ -359,19 +358,22 @@
   .secondary-button {
     padding: 0.6rem 0.85rem;
   }
-}
 
-/* Only fall back to stacking the dial above the metrics on genuinely narrow
-   phones where side-by-side no longer has room to breathe. */
-@media (max-width: 360px) {
-  .overview-main {
-    flex-wrap: wrap;
-    justify-content: center;
-    text-align: center;
+  .session-summary-grid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 0.4rem;
   }
 
-  .overview-stats {
-    min-width: 100%;
+  .metric-card {
+    padding: 0.45rem 0.55rem;
+    gap: 0.15rem;
+  }
+
+  .metric-label {
+    font-size: 0.64rem;
+  }
+
+  .metric-card strong {
+    font-size: 0.88rem;
   }
 }
-
