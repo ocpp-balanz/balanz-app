@@ -7,6 +7,24 @@ const STROKE = 12;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
+// The draggable handle's *visual* radius - its own geometry (r below) plus
+// half of its stroke-width, since SVG strokes are centered on the path and
+// so extend r further outward - is bigger than the ring's own half-stroke,
+// and the ring is drawn flush with the SVG's edges. Without this margin, the
+// handle sticks out past the viewBox (and gets clipped) at the
+// top/bottom/left/right points where it sits exactly on the ring.
+// HANDLE_STROKE must match .charging-dial-handle's stroke-width in
+// ChargingDial.css.
+const HANDLE_RADIUS = STROKE * 0.9;
+const HANDLE_STROKE = 3;
+const HANDLE_VISUAL_RADIUS = HANDLE_RADIUS + HANDLE_STROKE / 2;
+// Padding the viewBox, and the CSS box by the same amount (see
+// ChargingDial.css), keeps the ring itself rendered at the same size while
+// giving the handle room - plus a couple px of buffer for antialiasing.
+const HANDLE_PADDING = Math.ceil(HANDLE_VISUAL_RADIUS - STROKE / 2) + 2;
+const VIEWBOX_SIZE = SIZE + HANDLE_PADDING * 2;
+const CENTER = VIEWBOX_SIZE / 2;
+
 /**
  * A circular ring gauge for a single charger connector.
  *
@@ -64,8 +82,8 @@ export default function ChargingDial({
   // 0 fraction sits at the top of the circle (like the progress ring's own
   // rotate(-90) transform), increasing clockwise.
   const handleAngleRad = ((fraction * 360 - 90) * Math.PI) / 180;
-  const handleX = SIZE / 2 + RADIUS * Math.cos(handleAngleRad);
-  const handleY = SIZE / 2 + RADIUS * Math.sin(handleAngleRad);
+  const handleX = CENTER + RADIUS * Math.cos(handleAngleRad);
+  const handleY = CENTER + RADIUS * Math.sin(handleAngleRad);
 
   function fractionFromPoint(clientX, clientY) {
     const svg = svgRef.current;
@@ -145,23 +163,23 @@ export default function ChargingDial({
         <svg
           ref={svgRef}
           className="charging-dial-svg"
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          width={SIZE}
-          height={SIZE}
+          viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
+          width={VIEWBOX_SIZE}
+          height={VIEWBOX_SIZE}
           role="img"
           aria-label={interactive ? 'Max current limit, drag to adjust' : 'Charging status dial'}
           onPointerDown={handlePointerDown}
         >
-          <circle className="charging-dial-track" cx={SIZE / 2} cy={SIZE / 2} r={RADIUS} strokeWidth={STROKE} />
+          <circle className="charging-dial-track" cx={CENTER} cy={CENTER} r={RADIUS} strokeWidth={STROKE} />
           <circle
             className={`charging-dial-progress ${tone}`}
-            cx={SIZE / 2}
-            cy={SIZE / 2}
+            cx={CENTER}
+            cy={CENTER}
             r={RADIUS}
             strokeWidth={STROKE}
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={dashOffset}
-            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            transform={`rotate(-90 ${CENTER} ${CENTER})`}
           />
           {interactive ? (
             <circle className="charging-dial-handle" cx={handleX} cy={handleY} r={STROKE * 0.9} />

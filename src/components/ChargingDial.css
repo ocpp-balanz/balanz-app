@@ -4,10 +4,13 @@
   gap: 0.6rem;
 }
 
+/* 220px ring + 18px (2x9px) margin so the draggable handle isn't clipped at
+   the top/bottom/left/right points - see HANDLE_PADDING in ChargingDial.jsx,
+   which these dimensions must stay in sync with. */
 .charging-dial {
   position: relative;
-  width: 220px;
-  height: 220px;
+  width: 238px;
+  height: 238px;
   display: grid;
   place-items: center;
 }
@@ -206,8 +209,9 @@
 @media (max-width: 640px) {
   .charging-dial,
   .charging-dial-svg {
-    width: 190px;
-    height: 190px;
+    /* 190px ring + the same 18px handle margin as the desktop size above */
+    width: 208px;
+    height: 208px;
   }
 
   .charging-dial-wrap {
