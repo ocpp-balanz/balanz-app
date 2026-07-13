@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code: personal/per-machine permission allowlist, not shared config
+.claude/settings.local.json
