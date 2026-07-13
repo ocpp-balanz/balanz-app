@@ -317,9 +317,11 @@
   transform: none;
 }
 
-/* Phones: shrink paddings/fonts to keep the (now taller, stacked) overview
-   card reasonably compact - the dial itself already shrinks via its own
-   ChargingDial.css media query. */
+/* Phones: tighten paddings to keep the (now taller, stacked) overview card
+   reasonably compact, while keeping copy close to desktop sizing - a phone
+   has the width to spare, and cramped text reads as less "app-like" than a
+   native build. The dial itself scales via its own ChargingDial.css media
+   query. */
 @media (max-width: 640px) {
   .section-card {
     padding: 0.8rem 0.9rem;
@@ -338,11 +340,11 @@
   }
 
   .overview-card h2 {
-    font-size: 1.25rem;
+    font-size: 1.45rem;
   }
 
   .hero-subtitle {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -350,20 +352,28 @@
 
   .muted-chip {
     padding: 0.3rem 0.55rem;
-    font-size: 0.76rem;
+    font-size: 0.82rem;
   }
 
   .dial-section {
     gap: 0.6rem;
   }
 
+  .dial-readout {
+    font-size: 0.95rem;
+  }
+
+  .dial-hint {
+    font-size: 0.85rem;
+  }
+
   .icon-button {
-    width: 48px;
-    height: 48px;
+    width: 56px;
+    height: 56px;
   }
 
   .hero-meta {
-    font-size: 0.78rem;
+    font-size: 0.88rem;
     gap: 0.35rem 0.55rem;
   }
 
@@ -387,10 +397,10 @@
   }
 
   .metric-label {
-    font-size: 0.64rem;
+    font-size: 0.72rem;
   }
 
   .metric-card strong {
-    font-size: 0.88rem;
+    font-size: 1.05rem;
   }
 }
