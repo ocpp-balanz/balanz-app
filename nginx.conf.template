@@ -22,10 +22,12 @@ server {
     }
 
     # Optional: proxies the app's own /api path (same origin as the page) to
-    # the real Balanz OCPP server at BALANZ_UPSTREAM, which can then stay on
-    # an internal-only address and never be exposed to the internet itself -
-    # only this container is. Unused (and harmless) if VITE_API_BASE_URL is
-    # instead pointed directly at a public Balanz address.
+    # the real Balanz OCPP server at BALANZ_UPSTREAM, so the browser only
+    # needs to address this container rather than Balanz's own host/port.
+    # This is a transparent relay, not an auth boundary - it forwards the
+    # same Login handshake and commands unmodified, so it hides Balanz's
+    # internal address but does not restrict its API surface. Unused (and
+    # harmless) if VITE_API_BASE_URL is instead pointed directly at Balanz.
     location /api {
         proxy_pass http://${BALANZ_UPSTREAM}/api;
         proxy_http_version 1.1;

@@ -265,28 +265,37 @@ around. This setup doesn't provide TLS itself; put a reverse proxy in front
 if you need `https://` for the app itself (not required for this app's own
 functionality).
 
-### Reverse proxying `/api` (keeping the OCPP server off the public internet)
+### Reverse proxying `/api` (not a security boundary)
 
-By default the app talks directly to whatever `VITE_API_BASE_URL` points at
-— fine for a Balanz server you're already comfortable exposing, but not if
-your organization wants to keep the OCPP server itself internal-only. Since
-all backend traffic already goes through one path (`/api`, see
-`src/apiClient.js`), the container's own nginx can proxy that path to the
-real Balanz server instead of the browser talking to it directly:
+By default the app talks directly to whatever `VITE_API_BASE_URL` points at.
+Since all backend traffic already goes through one path (`/api`, see
+`src/apiClient.js`), the container's own nginx can instead proxy that path
+to the real Balanz server, so the browser only ever addresses this
+container rather than Balanz's own host/port directly:
 
 ```
-Browser (anywhere) --https/wss--> this container (public) --ws (LAN only)--> Balanz OCPP server (internal-only)
+Browser (anywhere) --https/wss--> this container (public) --ws (LAN only)--> Balanz OCPP server
 ```
 
-To use this mode:
+**This is not a way to keep the OCPP API off the internet.** The proxy is a
+transparent relay — it forwards the exact same `Login` handshake and every
+subsequent command byte-for-byte, with no added authentication or
+restriction on which commands can be sent. Anyone who can reach the
+container's public URL can do everything they could do by reaching Balanz
+directly; only Balanz's internal network address is hidden, not its API
+surface. It's useful for consolidating TLS/hostname handling in one place,
+not for satisfying a "the OCPP server must not be reachable from outside"
+requirement. For that, the real fix is a server-side component that
+terminates the browser connection with its own auth and only forwards a
+curated set of operations — a backend-for-frontend, not a byte-level proxy.
+
+To use this mode anyway:
 
 1. Set `VITE_API_BASE_URL` to this app's *own* public address (not
    Balanz's) — e.g. `https://ocpp.example.com`, the same address the app
    itself is served from. The app then calls same-origin `/api`.
 2. Set `BALANZ_UPSTREAM` to the real Balanz server's `host:port` as reached
-   from *inside* the container (a LAN address, e.g. `192.168.1.50:9111`) —
-   this stays off the public internet entirely; only the container itself
-   needs to be reachable from outside.
+   from *inside* the container (a LAN address, e.g. `192.168.1.50:9111`).
 
 ```bash
 HOST_PORT=8081 \
