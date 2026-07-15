@@ -11,6 +11,22 @@
      produced a very tall, mostly-empty, scrolling chart. Height now just
      comes from the height="..." attribute the chart is rendered with,
      independent of width (see ChargingHistoryChart.jsx). */
+  /* touch-action: none hands pinch/drag entirely to the pointer-event zoom
+     /pan handlers instead of the browser's own scroll/zoom gestures. */
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.charging-history-chart svg:active {
+  cursor: grabbing;
+}
+
+.chart-hint {
+  margin: 0;
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--muted-text);
 }
 
 .chart-gridline {

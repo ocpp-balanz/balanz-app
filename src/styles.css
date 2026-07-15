@@ -604,6 +604,13 @@ code {
   margin: 0;
 }
 
+.modal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
 /* Simple key/value list for the About panel (version, build date). */
 .about-list {
   display: grid;

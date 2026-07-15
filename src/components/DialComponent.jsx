@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 
 import { canControlCharging, canSetChargePriority } from '../apiClient';
 import ChargingDial from './ChargingDial';
@@ -125,6 +125,12 @@ export default function DialComponent({
   const [graphOpen, setGraphOpen] = useState(false);
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [startTagInput, setStartTagInput] = useState('');
+  // Tracks the chart's own zoom state (see ChargingHistoryChart) purely so
+  // the "Reset zoom" button can live in this fixed-size modal header
+  // instead of inside the chart's own layout, which would otherwise resize
+  // the modal each time that button appeared/disappeared.
+  const [chartZoomed, setChartZoomed] = useState(false);
+  const chartRef = useRef(null);
 
   const session = charger.session || null;
   const connector = charger.activeConnector || null;
@@ -439,11 +445,22 @@ export default function DialComponent({
                 <p className="section-kicker">Recent activity</p>
                 <h3>Charging graph</h3>
               </div>
-              <button className="ghost-button" type="button" onClick={() => setGraphOpen(false)}>
-                Close
-              </button>
+              <div className="modal-header-actions">
+                {chartZoomed ? (
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => chartRef.current?.resetZoom()}
+                  >
+                    Reset zoom
+                  </button>
+                ) : null}
+                <button className="ghost-button" type="button" onClick={() => setGraphOpen(false)}>
+                  Close
+                </button>
+              </div>
             </div>
-            <ChargingHistoryChart history={history} height={260} />
+            <ChargingHistoryChart ref={chartRef} history={history} height={260} onZoomChange={setChartZoomed} />
           </div>
         </>
       ) : null}
