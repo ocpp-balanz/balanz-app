@@ -226,7 +226,6 @@ export default function DialComponent({
               <code>{charger.chargerId}</code>
             </span>
             <span>{charger.groupId || 'Ungrouped'}</span>
-            {isAllocationGroup ? <span>Priority {connector?.priority ?? charger.priority ?? '--'}</span> : null}
           </div>
         </div>
 
