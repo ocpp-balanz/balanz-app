@@ -4,7 +4,29 @@ function formatAmps(value) {
   if (value === null || value === undefined) {
     return '--';
   }
-  return `${value} A`;
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return '--';
+  }
+  // Offered/max are whole amps; usage is a live meter reading that can be
+  // fractional - round to 1 decimal so "12.86" doesn't crowd the compact
+  // per-charger chips, while integers still render clean ("16 A", not "16.0").
+  return `${Math.round(number * 10) / 10} A`;
+}
+
+// Per-charger equivalents of the group-level Max/Offered/Usage stats, read
+// from the charger's active connector (offered/priority/usage) and its own
+// conn_max. There is no per-charger "max now" in the Balanz model - the
+// allocation ceiling is a shared group value - so the charger's own conn_max
+// (its hardware/config maximum) stands in as its "Max".
+function chargerStats(charger) {
+  const connector = charger.activeConnector || null;
+  return {
+    max: charger.connMax ?? null,
+    offered: connector?.offered ?? null,
+    usage: charger.session?.usageMeterA ?? null,
+    priority: connector?.priority ?? charger.priority ?? null,
+  };
 }
 
 export default function GroupsScreen({
@@ -85,6 +107,37 @@ export default function GroupsScreen({
                         <div className="charger-meta">
                           <span>{charger.chargerId}</span>
                         </div>
+                        {(() => {
+                          const stats = chargerStats(charger);
+                          // Offered/Usage are meaningful for any charger; Max
+                          // (allocation ceiling) and Priority only apply to
+                          // SmartCharging (allocation) groups, so those two
+                          // chips are shown only there.
+                          return (
+                            <div className="charger-stats">
+                              {group.isAllocationGroup ? (
+                                <span className="charger-stat">
+                                  <span className="charger-stat-label">Max</span>
+                                  {formatAmps(stats.max)}
+                                </span>
+                              ) : null}
+                              <span className="charger-stat">
+                                <span className="charger-stat-label">Offered</span>
+                                {formatAmps(stats.offered)}
+                              </span>
+                              <span className="charger-stat">
+                                <span className="charger-stat-label">Usage</span>
+                                {formatAmps(stats.usage)}
+                              </span>
+                              {group.isAllocationGroup ? (
+                                <span className="charger-stat">
+                                  <span className="charger-stat-label">Priority</span>
+                                  {stats.priority ?? '--'}
+                                </span>
+                              ) : null}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </button>
                   );
