@@ -478,12 +478,44 @@ code {
   gap: 0.85rem;
 }
 
+/* The header doubles as the accordion toggle for its group - a full-width
+   button reset so it still lays out like the old header row. */
 .group-card-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 0.75rem;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.group-chevron {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: var(--muted-text);
+  transition: transform 0.15s ease;
+}
+
+.group-card-header.is-open .group-chevron {
+  transform: rotate(90deg);
+}
+
+.group-card-header:hover h3 {
+  color: var(--accent);
 }
 
 .group-card-header h3 {

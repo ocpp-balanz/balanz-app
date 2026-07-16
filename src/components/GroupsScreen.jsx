@@ -1,4 +1,20 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+
+// Right-pointing chevron; rotated 90deg via CSS when its group is expanded.
+function ChevronIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d="M9 6l6 6-6 6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function formatAmps(value) {
   if (value === null || value === undefined) {
@@ -78,6 +94,44 @@ export default function GroupsScreen({
   onRefresh,
   onClose,
 }) {
+  // Which groups are expanded (accordion-style, like balanz-ui). Groups are
+  // collapsed by default so the ~20-group list stays a short, scannable set
+  // of headers; the group holding the currently-selected charger is opened
+  // automatically on first load so the user lands on something useful.
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+  const didInitRef = useRef(false);
+
+  useEffect(() => {
+    if (didInitRef.current || groups.length === 0) {
+      return;
+    }
+    didInitRef.current = true;
+    const selectedGroup = groups.find((group) =>
+      group.chargers.some((charger) => charger.chargerId === selectedChargerId),
+    );
+    if (selectedGroup) {
+      setExpandedGroups(new Set([selectedGroup.groupId]));
+    }
+  }, [groups, selectedChargerId]);
+
+  function toggleGroup(groupId) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }
+
+  const allExpanded = groups.length > 0 && expandedGroups.size === groups.length;
+
+  function toggleAll() {
+    setExpandedGroups(allExpanded ? new Set() : new Set(groups.map((group) => group.groupId)));
+  }
+
   return (
     <section className="panel detail-panel groups-screen">
       <div className="section-header">
@@ -86,6 +140,11 @@ export default function GroupsScreen({
           <h2>Group status</h2>
         </div>
         <div className="header-actions">
+          {groups.length > 0 ? (
+            <button className="ghost-button" type="button" onClick={toggleAll}>
+              {allExpanded ? 'Collapse all' : 'Expand all'}
+            </button>
+          ) : null}
           <button className="ghost-button" type="button" onClick={onRefresh} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh'}
           </button>
@@ -104,12 +163,27 @@ export default function GroupsScreen({
       ) : null}
 
       <div className="group-list">
-        {groups.map((group) => (
+        {groups.map((group) => {
+          const isExpanded = expandedGroups.has(group.groupId);
+          const chargerCount = group.chargers.length;
+          return (
           <article key={group.groupId} className="group-card">
-            <div className="group-card-header">
-              <div>
-                <h3>{group.description || group.groupId}</h3>
-                <p className="subtle">{group.groupId}</p>
+            <button
+              type="button"
+              className={`group-card-header ${isExpanded ? 'is-open' : ''}`}
+              onClick={() => toggleGroup(group.groupId)}
+              aria-expanded={isExpanded}
+            >
+              <div className="group-card-heading">
+                <span className="group-chevron">
+                  <ChevronIcon />
+                </span>
+                <div>
+                  <h3>{group.description || group.groupId}</h3>
+                  <p className="subtle">
+                    {group.groupId} · {chargerCount} charger{chargerCount === 1 ? '' : 's'}
+                  </p>
+                </div>
               </div>
               {group.isAllocationGroup ? (
                 <div className="group-allocation">
@@ -120,8 +194,9 @@ export default function GroupsScreen({
               ) : (
                 <span className="muted-chip">Not smart-charged</span>
               )}
-            </div>
+            </button>
 
+            {isExpanded ? (
             <div className="charger-items">
               {group.chargers.length === 0 ? (
                 <div className="inline-state">No chargers in this group.</div>
@@ -200,8 +275,10 @@ export default function GroupsScreen({
                 })
               )}
             </div>
+            ) : null}
           </article>
-        ))}
+          );
+        })}
       </div>
     </section>
   );
