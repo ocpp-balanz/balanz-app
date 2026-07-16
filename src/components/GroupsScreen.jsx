@@ -29,6 +29,46 @@ function chargerStats(charger) {
   };
 }
 
+function pad2(n) {
+  return String(n).padStart(2, '0');
+}
+
+// Fixed YYYY-MM-DD hh:mm (24h, local), matching DialComponent's session
+// summary rather than a locale-driven format, for a consistent look.
+function formatTimestamp(value) {
+  if (value === null || value === undefined || value === '') {
+    return '--';
+  }
+  const raw = Number(value);
+  if (!Number.isFinite(raw)) {
+    return '--';
+  }
+  const milliseconds = raw > 10_000_000_000 ? raw : raw * 1000;
+  const date = new Date(milliseconds);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+}
+
+function formatEnergy(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return '--';
+  }
+  return `${Number(value).toFixed(2)} kWh`;
+}
+
+// User label for an active session, mirroring DialComponent: a Free Vending
+// session shows a plain "Free vending" label rather than the charger-id tag
+// it technically carries; otherwise the user name, falling back to the raw
+// id tag.
+function sessionUser(session) {
+  if (session.isFreeVending) {
+    return 'Free vending';
+  }
+  if (session.userName && session.userName !== 'Unknown') {
+    return session.userName;
+  }
+  return session.idTag || '--';
+}
+
 export default function GroupsScreen({
   groups,
   loading,
@@ -134,6 +174,22 @@ export default function GroupsScreen({
                                   <span className="charger-stat-label">Priority</span>
                                   {stats.priority ?? '--'}
                                 </span>
+                              ) : null}
+                              {charger.session ? (
+                                <>
+                                  <span className="charger-stat">
+                                    <span className="charger-stat-label">User</span>
+                                    {sessionUser(charger.session)}
+                                  </span>
+                                  <span className="charger-stat">
+                                    <span className="charger-stat-label">Start</span>
+                                    {formatTimestamp(charger.session.startTime)}
+                                  </span>
+                                  <span className="charger-stat">
+                                    <span className="charger-stat-label">Charged</span>
+                                    {formatEnergy(charger.session.energyKwh)}
+                                  </span>
+                                </>
                               ) : null}
                             </div>
                           );

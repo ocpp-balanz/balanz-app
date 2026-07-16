@@ -452,6 +452,7 @@ code {
   border: 1px solid var(--border-color);
   background: var(--track-color);
   color: var(--text-color);
+  white-space: nowrap;
 }
 
 .charger-stat-label {
