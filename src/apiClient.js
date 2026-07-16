@@ -291,6 +291,22 @@ function normalizeGroup(source = {}) {
   };
 }
 
+// A tag (RFID/virtual) from GetTags. `status` is "Activated" or "Blocked";
+// `id_tag` is the actual RFID value sent to the charger on a remote start,
+// `user_name` is the human-friendly label to pick it by. `description` is
+// deliberately not surfaced for tag selection (it's free-form and not a
+// reliable identifier).
+function normalizeTag(source = {}) {
+  return {
+    idTag: String(source.id_tag ?? '').trim(),
+    userName: String(source.user_name ?? '').trim(),
+    parentIdTag: source.parent_id_tag ?? null,
+    status: source.status ?? null,
+    priority: toNumber(source.priority, 0),
+    raw: source,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // WebSocket client. Owns the connection, login/session state, retries and
 // message correlation. All API calls above go through `call()`.
@@ -518,6 +534,11 @@ class BalanzWebsocketClient {
     return (Array.isArray(list) ? list : []).map(normalizeGroup);
   }
 
+  async fetchTags() {
+    const list = await this.call('GetTags', {});
+    return (Array.isArray(list) ? list : []).map(normalizeTag);
+  }
+
   async setTxProfile({ chargerId, connectorId, transactionId, limit }) {
     return this.call('SetTxProfile', {
       charger_id: chargerId,
@@ -728,6 +749,10 @@ export async function fetchChargers(filters) {
 
 export async function fetchGroups(options) {
   return client.fetchGroups(options);
+}
+
+export async function fetchTags() {
+  return client.fetchTags();
 }
 
 export async function setTxProfile(payload) {

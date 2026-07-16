@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
-import { canControlCharging, canSetChargePriority } from '../apiClient';
+import { canControlCharging, canSetChargePriority, fetchTags } from '../apiClient';
 import ChargingDial from './ChargingDial';
 import ChargingHistoryChart from './ChargingHistoryChart';
 import './DialStyles.css';
@@ -124,7 +124,22 @@ export default function DialComponent({
 }) {
   const [graphOpen, setGraphOpen] = useState(false);
   const [startModalOpen, setStartModalOpen] = useState(false);
-  const [startTagInput, setStartTagInput] = useState('');
+  // Remote-start tag selection. The charger accepts any string as an id_tag,
+  // so rather than a free-text field (which risks starting a session with an
+  // id no real tag owns), the user picks a known tag from GetTags. `tagSearch`
+  // filters that list by user name; `selectedTag` holds the chosen tag whose
+  // idTag (RFID value) is what actually gets sent.
+  const [tags, setTags] = useState([]);
+  const [tagsLoading, setTagsLoading] = useState(false);
+  const [tagsError, setTagsError] = useState('');
+  const [tagSearch, setTagSearch] = useState('');
+  const [selectedTag, setSelectedTag] = useState(null);
+  // Guards the one-time tag load so the loader effect below can depend only
+  // on `startModalOpen` - keying it on tagsLoading instead would let the
+  // effect's own setTagsLoading(true) re-run it, whose cleanup then cancels
+  // the very fetch it just started (tags would spin forever). Reset on error
+  // so reopening the dialog retries.
+  const tagsLoadedRef = useRef(false);
   // Tracks the chart's own zoom state (see ChargingHistoryChart) purely so
   // the "Reset zoom" button can live in this fixed-size modal header
   // instead of inside the chart's own layout, which would otherwise resize
@@ -196,17 +211,64 @@ export default function DialComponent({
       : 'Start a session at the charger, or ask an admin to start one remotely.';
 
   function openStartModal() {
-    setStartTagInput(charger.chargerId || '');
+    setTagSearch('');
+    setSelectedTag(null);
     setStartModalOpen(true);
   }
 
-  function handleStartSubmit(event) {
-    event.preventDefault();
-    const trimmed = startTagInput.trim();
-    if (!trimmed) {
+  // Load the tag list when the start dialog opens (once per session - tags
+  // change rarely, and 250-odd entries are cheap to keep). Only Activated
+  // tags are offered; a Blocked tag would just be rejected by the backend.
+  // Depends solely on startModalOpen (see tagsLoadedRef above for why).
+  useEffect(() => {
+    if (!startModalOpen || tagsLoadedRef.current) {
       return;
     }
-    onStartTransaction(trimmed);
+    tagsLoadedRef.current = true;
+    let cancelled = false;
+    setTagsLoading(true);
+    setTagsError('');
+    fetchTags()
+      .then((list) => {
+        if (cancelled) return;
+        const usable = list
+          .filter((tag) => tag.idTag && tag.status !== 'Blocked')
+          .sort((a, b) => (a.userName || a.idTag).localeCompare(b.userName || b.idTag));
+        setTags(usable);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        tagsLoadedRef.current = false;
+        setTagsError(error instanceof Error ? error.message : 'Could not load tags.');
+      })
+      .finally(() => {
+        if (!cancelled) setTagsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [startModalOpen]);
+
+  const tagQuery = tagSearch.trim().toLowerCase();
+  // Match on user name only (per requirements - the free-form description is
+  // deliberately not searched), plus the id_tag itself so someone who knows
+  // the RFID value can still find it. Cap the rendered rows so a broad/empty
+  // search doesn't paint all ~250 at once; narrowing the search reveals more.
+  const filteredTags = tags
+    .filter(
+      (tag) =>
+        !tagQuery ||
+        tag.userName.toLowerCase().includes(tagQuery) ||
+        tag.idTag.toLowerCase().includes(tagQuery),
+    )
+    .slice(0, 50);
+
+  function handleStartSubmit(event) {
+    event.preventDefault();
+    if (!selectedTag) {
+      return;
+    }
+    onStartTransaction(selectedTag.idTag);
     setStartModalOpen(false);
   }
 
@@ -402,25 +464,52 @@ export default function DialComponent({
 
             <form className="auth-form" onSubmit={handleStartSubmit}>
               <label className="field">
-                <span>ID tag</span>
+                <span>Charging tag</span>
                 <input
                   type="text"
-                  value={startTagInput}
-                  onChange={(event) => setStartTagInput(event.target.value)}
-                  placeholder="RFID or virtual tag id"
+                  value={tagSearch}
+                  onChange={(event) => setTagSearch(event.target.value)}
+                  placeholder="Search by user name"
                   autoComplete="off"
-                  required
                 />
               </label>
 
+              {tagsLoading ? <div className="inline-state">Loading tags...</div> : null}
+              {tagsError ? <div className="alert alert-error">{tagsError}</div> : null}
+
+              {!tagsLoading && !tagsError ? (
+                <div className="tag-picker" role="listbox" aria-label="Charging tags">
+                  {filteredTags.length === 0 ? (
+                    <div className="inline-state">No matching tags.</div>
+                  ) : (
+                    filteredTags.map((tag) => {
+                      const isSelected = selectedTag?.idTag === tag.idTag;
+                      return (
+                        <button
+                          key={tag.idTag}
+                          type="button"
+                          role="option"
+                          aria-selected={isSelected}
+                          className={`tag-option ${isSelected ? 'is-selected' : ''}`}
+                          onClick={() => setSelectedTag(tag)}
+                        >
+                          <strong>{tag.userName || '(no user name)'}</strong>
+                          <span className="tag-option-id">{tag.idTag}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              ) : null}
+
               <p className="subtle">
-                A real session normally starts with an RFID scan at the charger - a remote start needs an id tag
-                supplied here instead. It defaults to the charger's own id, the same convention this app already
-                uses to detect and label "Free vending" sessions.
+                {selectedTag
+                  ? `Starting a session for ${selectedTag.userName || '(no user name)'} (${selectedTag.idTag}).`
+                  : 'A remote start needs a valid tag. Pick the tag (by user name) to authorize the session with.'}
               </p>
 
               <div className="action-row">
-                <button className="primary-button" type="submit" disabled={saving || loading}>
+                <button className="primary-button" type="submit" disabled={saving || loading || !selectedTag}>
                   {saving ? 'Starting...' : 'Start charging'}
                 </button>
                 <button
