@@ -314,6 +314,22 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, selectedChargerId]);
 
+  // Swapping the rendered screen doesn't reset the window's scroll offset,
+  // so opening a charger from part-way down a long group list left the new
+  // screen scrolled past its own header - on a phone the dial ended up at
+  // the top with the header off-screen above it. Reset to the top when
+  // drilling in, and restore the list's previous position when coming back.
+  const groupsScrollRef = useRef(0);
+  useEffect(() => {
+    if (view === 'dashboard') {
+      window.scrollTo(0, 0);
+    } else {
+      window.scrollTo(0, groupsScrollRef.current || 0);
+    }
+    // selectedChargerId is a dependency too: picking a different charger
+    // while already on the dashboard should also start at the top.
+  }, [view, selectedChargerId]);
+
   // Tracks the latest selectedChargerId for scheduleFollowUpRefresh below,
   // since a plain closure over the state value would go stale if the user
   // switches chargers before the 5s timer fires.
@@ -353,6 +369,10 @@ export default function App() {
   }
 
   function handleSelectCharger(chargerId) {
+    // Remember where the (potentially long) group list was scrolled to, so
+    // coming back lands on the charger that was just tapped rather than
+    // jumping to the top.
+    groupsScrollRef.current = window.scrollY;
     setSelectedChargerId(chargerId);
     storeSelectedChargerId(chargerId);
     setMenuOpen(false);

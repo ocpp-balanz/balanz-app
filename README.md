@@ -114,6 +114,14 @@ identity chip, described below.
 On launch the app opens the last-selected charger if one is remembered, and
 the groups list otherwise.
 
+Switching screens resets the window scroll: swapping the rendered view does
+not do so by itself, so opening a charger from part-way down a long group
+list previously left the charger screen scrolled past its own header — on a
+phone the dial appeared at the top with the header off-screen above it and
+blank space below. Drilling into a charger now starts at the top, while
+going back restores the group list to where it was, so the charger just
+visited is still under the thumb.
+
 ## Group types & permissions
 
 Balanz groups come in two kinds (see

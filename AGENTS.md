@@ -55,6 +55,9 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   hiding it).
 - More generally: never make the only escape hatch from a state conditional
   on data that can be absent.
+- Screen changes must manage scroll position explicitly (top when drilling
+  in, restored when going back) - swapping views does not reset it, which
+  strands the new screen scrolled past its own header.
 - Opening a modal panel should dismiss whatever opened it (e.g. the drawer)
   rather than layering surfaces on top of each other.
 - The charger detail view should emphasize current OCPP status and session information.
