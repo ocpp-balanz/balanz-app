@@ -39,9 +39,13 @@ export default function UserMenu({ userId, userType, onLogout }) {
     };
   }, [open]);
 
-  if (!userId) {
-    return null;
-  }
+  // The user id can legitimately be unknown: sessions started before it was
+  // ever stored (the Login response doesn't return it - see apiClient's
+  // USER_ID_KEY) resume with a valid token but no id. This component is the
+  // only route to sign out, so it must never render nothing - it falls back
+  // to a generic label instead. Signing out and back in fills the id in.
+  const label = userId || 'Account';
+  const roleLabel = userType || 'Signed in';
 
   return (
     <div className="header-user-wrap" ref={containerRef}>
@@ -54,10 +58,10 @@ export default function UserMenu({ userId, userType, onLogout }) {
         className="header-user"
         aria-haspopup="menu"
         aria-expanded={open}
-        title={`Signed in as ${userId} (${userType})`}
+        title={userId ? `Signed in as ${userId} (${userType})` : 'Account'}
         onClick={() => setOpen((value) => !value)}
       >
-        <span className="header-user-name">{userId}</span>
+        <span className="header-user-name">{label}</span>
         <svg className="header-user-caret" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
           <path
             d="M6 9l6 6 6-6"
@@ -75,8 +79,8 @@ export default function UserMenu({ userId, userType, onLogout }) {
           {/* The menu carries the full identity - name plus role - so the
               trigger above only needs the name. */}
           <div className="header-user-menu-head">
-            <strong>{userId}</strong>
-            <small>{userType}</small>
+            <strong>{label}</strong>
+            <small>{roleLabel}</small>
           </div>
           <button
             type="button"

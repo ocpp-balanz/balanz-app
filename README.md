@@ -96,6 +96,12 @@ back apart, the user id typed at sign-in is stored alongside the token
 purely so it can be displayed here — including after a stored-session
 resume. It is cleared on sign-out.
 
+A session that began *before* that id was stored therefore resumes with a
+valid token but no id. The chip falls back to a generic "Account" label in
+that case rather than hiding itself: it is the only route to sign out, so
+rendering nothing would strand the user with no way out. Signing out and
+back in fills the id in.
+
 The drawer therefore holds one primary nav item (Groups & status, marked as
 current when it is) plus the understated utility actions (server settings,
 about) pinned to the bottom. Choosing either of those closes the drawer
