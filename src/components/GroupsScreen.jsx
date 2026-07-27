@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React from 'react';
 
 // Right-pointing chevron; rotated 90deg via CSS when its group is expanded.
 function ChevronIcon() {
@@ -85,49 +85,33 @@ function sessionUser(session) {
   return session.idTag || '--';
 }
 
+/**
+ * Which groups are expanded is deliberately *not* local state here: this
+ * screen unmounts whenever a charger is opened, and losing the accordion
+ * state on the way back would both re-collapse the list the user had
+ * arranged and change its height, which in turn broke restoring their scroll
+ * position (the saved offset got clamped against a suddenly-short page). It
+ * lives in App instead, alongside the scroll position it has to stay
+ * consistent with.
+ */
 export default function GroupsScreen({
   groups,
   loading,
   error,
   selectedChargerId,
   onSelectCharger,
+  expandedGroups,
+  onToggleGroup,
+  onToggleAll,
 }) {
-  // Which groups are expanded (accordion-style, like balanz-ui). Groups are
-  // collapsed by default so the ~20-group list stays a short, scannable set
-  // of headers; the group holding the currently-selected charger is opened
-  // automatically on first load so the user lands on something useful.
-  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
-  const didInitRef = useRef(false);
-
-  useEffect(() => {
-    if (didInitRef.current || groups.length === 0) {
-      return;
-    }
-    didInitRef.current = true;
-    const selectedGroup = groups.find((group) =>
-      group.chargers.some((charger) => charger.chargerId === selectedChargerId),
-    );
-    if (selectedGroup) {
-      setExpandedGroups(new Set([selectedGroup.groupId]));
-    }
-  }, [groups, selectedChargerId]);
-
   function toggleGroup(groupId) {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(groupId)) {
-        next.delete(groupId);
-      } else {
-        next.add(groupId);
-      }
-      return next;
-    });
+    onToggleGroup(groupId);
   }
 
   const allExpanded = groups.length > 0 && expandedGroups.size === groups.length;
 
   function toggleAll() {
-    setExpandedGroups(allExpanded ? new Set() : new Set(groups.map((group) => group.groupId)));
+    onToggleAll(allExpanded);
   }
 
   return (

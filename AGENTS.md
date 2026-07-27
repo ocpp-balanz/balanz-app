@@ -16,6 +16,9 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   click away in the account menu, so it is always clear which account's
   permissions are in effect. Do not duplicate the same detail in both the
   trigger and the menu it opens.
+- The header stays pinned to the top of the viewport on every screen; its
+  controls must not require scrolling to reach. Keep it below the drawer and
+  modal layers in the z-order so those still cover it.
 - The group screen displays basic status information concerning all groups
   and their chargers, and is where the active charger is selected. It is the
   navigation root; the charger screen is the detail view drilled into from
@@ -58,6 +61,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 - Screen changes must manage scroll position explicitly (top when drilling
   in, restored when going back) - swapping views does not reset it, which
   strands the new screen scrolled past its own header.
+- State that must survive navigation (e.g. which groups are expanded) belongs
+  in `App`, not in a screen component that unmounts. Restoring a scroll
+  position only works if the page is the same height it was when the position
+  was recorded, so that state and the saved offset have to be kept together.
 - Opening a modal panel should dismiss whatever opened it (e.g. the drawer)
   rather than layering surfaces on top of each other.
 - The charger detail view should emphasize current OCPP status and session information.

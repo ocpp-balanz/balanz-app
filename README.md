@@ -114,13 +114,36 @@ identity chip, described below.
 On launch the app opens the last-selected charger if one is remembered, and
 the groups list otherwise.
 
-Switching screens resets the window scroll: swapping the rendered view does
+The header is **sticky**: it stays pinned to the top of the viewport rather
+than scrolling away with the content, so back / menu / account are reachable
+from anywhere in a long groups list or charger page. It sits at `z-index: 15`
+— above page content, but below the drawer backdrop (20), drawer (30) and
+modals (40), so those still cover it.
+
+This is also why `.app-shell` is block flow rather than a grid: a sticky
+element is confined to its containing block, and as a grid item that would
+be its own auto-sized row, leaving it no travel — it would silently never
+stick. The spacing the grid `gap` used to provide now comes from margins on
+the header and alerts.
+
+Switching screens manages the window scroll: swapping the rendered view does
 not do so by itself, so opening a charger from part-way down a long group
 list previously left the charger screen scrolled past its own header — on a
 phone the dial appeared at the top with the header off-screen above it and
 blank space below. Drilling into a charger now starts at the top, while
 going back restores the group list to where it was, so the charger just
 visited is still under the thumb.
+
+Two details make the restore actually work, both easy to break:
+
+- **The accordion state lives in `App`, not `GroupsScreen`.** That component
+  unmounts whenever a charger is opened, so holding the expanded-groups set
+  inside it meant the list came back *collapsed* — a much shorter page,
+  against which the saved offset was clamped, so the restore silently did
+  nothing.
+- **The restore runs in `useLayoutEffect`.** In a plain `useEffect` it is
+  applied before the expanded rows have been laid out, with the same
+  clamping result, and any correction would flicker after paint.
 
 ## Group types & permissions
 

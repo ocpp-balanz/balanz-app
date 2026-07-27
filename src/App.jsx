@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import {
   ApiError,
@@ -83,6 +83,29 @@ export default function App() {
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupsError, setGroupsError] = useState('');
 
+  // Accordion state for the groups list. Held here, not in GroupsScreen,
+  // because that component unmounts every time a charger is opened - keeping
+  // it there meant the list came back collapsed, which also silently broke
+  // scroll restoration (a shorter page clamps the offset being restored).
+  const [expandedGroups, setExpandedGroups] = useState(() => new Set());
+  const didExpandInitialRef = useRef(false);
+
+  function handleToggleGroup(groupId) {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }
+
+  function handleToggleAll(allExpanded) {
+    setExpandedGroups(allExpanded ? new Set() : new Set(groups.map((group) => group.groupId)));
+  }
+
   // group_id -> group, so the selected charger's group type (allocation /
   // SmartCharging vs. not) can be looked up without a dedicated fetch.
   const groupsIndex = useMemo(() => {
@@ -116,6 +139,8 @@ export default function App() {
     setDraftPriority(null);
     setDetailRefreshToken(0);
     setGroups([]);
+    setExpandedGroups(new Set());
+    didExpandInitialRef.current = false;
   }
 
   function handleAuthFailure(error) {
@@ -314,13 +339,33 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, selectedChargerId]);
 
+  // Open the group holding the selected charger the first time groups
+  // arrive, so the list lands on something useful. Runs once per session.
+  useEffect(() => {
+    if (didExpandInitialRef.current || groups.length === 0) {
+      return;
+    }
+    didExpandInitialRef.current = true;
+    const groupOfSelected = groups.find((group) =>
+      group.chargers.some((charger) => charger.chargerId === selectedChargerId),
+    );
+    if (groupOfSelected) {
+      setExpandedGroups(new Set([groupOfSelected.groupId]));
+    }
+  }, [groups, selectedChargerId]);
+
   // Swapping the rendered screen doesn't reset the window's scroll offset,
   // so opening a charger from part-way down a long group list left the new
   // screen scrolled past its own header - on a phone the dial ended up at
   // the top with the header off-screen above it. Reset to the top when
   // drilling in, and restore the list's previous position when coming back.
+  //
+  // useLayoutEffect, not useEffect: this has to run after the DOM is laid
+  // out but before paint, otherwise the restore is applied against the old
+  // (or not-yet-expanded) page height and gets clamped - which is exactly
+  // why the first attempt at this appeared to do nothing.
   const groupsScrollRef = useRef(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (view === 'dashboard') {
       window.scrollTo(0, 0);
     } else {
@@ -597,6 +642,9 @@ export default function App() {
             error={groupsError}
             selectedChargerId={selectedChargerId}
             onSelectCharger={handleSelectCharger}
+            expandedGroups={expandedGroups}
+            onToggleGroup={handleToggleGroup}
+            onToggleAll={handleToggleAll}
           />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
