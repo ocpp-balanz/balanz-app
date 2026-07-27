@@ -258,7 +258,11 @@ plugin was needed.
 
 ## Requirements
 
-- Node.js 18+
+- Node.js 22+ (`engines.node` in `package.json`, `.nvmrc`, and the
+  Dockerfile's build stage all say 22). `@capacitor/cli` requires `>=22`, so
+  an older runtime makes `npm install` / `npm ci` emit `EBADENGINE` warnings
+  for the whole install — even though the web build itself doesn't use the
+  Capacitor CLI.
 - A reachable Balanz server (see the
   [Balanz repo](https://github.com/ocpp-balanz/balanz) for running one
   locally) with at least one user configured in `users.csv`.
@@ -342,11 +346,22 @@ serve the production build from a small container instead:
 docker compose up --build
 ```
 
-This builds the app (Node, multi-stage) and serves the static `dist/` output
-via nginx on `http://localhost:8081` by default. From another device on the
+This builds the app (Node 22, multi-stage) and serves the static `dist/`
+output via nginx on `http://localhost:8081` by default. From another device on the
 same network, use this machine's LAN IP instead of `localhost`
 (`http://<lan-ip>:8081`) — same idea as reaching the Vite dev server from a
 phone, just pointed at a container instead of `npm run dev`.
+
+Two `npm warn deprecated` lines (for `glob@11` and `source-map@0.8.0-beta.0`)
+are expected during the image build. Both come from `workbox-build`, a
+transitive dependency of `vite-plugin-pwa`, which is already on its latest
+release — there is nothing to update on our side, and neither package ships
+in the output. Anything mentioning `EBADENGINE`, on the other hand, means the
+build ran on a Node older than 22 (see "Requirements" above).
+
+`npm audit` findings are likewise confined to the build toolchain (the
+Vite/workbox chain). The runtime dependency tree is just React and
+`@capacitor/core`/`app`, so those advisories don't reach the served bundle.
 
 Two things are configurable, both optional:
 

@@ -73,6 +73,13 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   a rebuild / dev-server restart (see "Version & build info" in the README).
 - Update the README whenever setup or runtime steps change.
 - Keep `package.json` scripts aligned with the actual web and Capacitor workflow.
+- Keep the Node version consistent across `engines.node` in `package.json`,
+  `.nvmrc`, and the Dockerfile build stage. It is currently 22, set by
+  `@capacitor/cli`'s `>=22` requirement; a mismatch shows up as `EBADENGINE`
+  warnings on every install.
+- Regenerate `package-lock.json` (`npm install --package-lock-only`) after
+  editing `package.json` — including version bumps. `npm ci`, which the
+  Docker build uses, fails when the two disagree.
 - Keep the `Dockerfile` / `docker-compose.yml` / `nginx.conf.template` aligned with the
   actual build output (`dist/`) if the build tooling or output path changes -
   this is the served path for devices (e.g. iOS Safari) that can't run the

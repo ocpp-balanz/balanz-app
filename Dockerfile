@@ -1,7 +1,12 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build the static web app ----
-FROM node:20-alpine AS build
+# Node 22, not 20: @capacitor/cli declares engines.node ">=22.0.0", so an
+# older base emits EBADENGINE warnings for the whole install. It's only a
+# devDependency and unused by the web build itself, but `npm ci` installs
+# dev dependencies (Vite among them), so the constraint still applies here.
+# Keep this in step with the `engines.node` field in package.json.
+FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
