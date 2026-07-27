@@ -83,8 +83,12 @@ ending the session.
 
 The pill deliberately shows only the name: the role is one click away in the
 menu, and Balanz user names are short enough that the full name fits even on
-a phone. The pill is omitted on the charger view, to keep that header to the
-charger's own name.
+a phone. It is shown on **every** screen, not just the root — sign out lives
+behind it, so restricting it to one view stranded anyone who landed on the
+charger view, which is exactly what happens on launch when a
+previously-selected charger is remembered. For the same reason the header
+is `flex-wrap: nowrap`: the title ellipsizes rather than pushing the pill
+onto a second line where it could scroll out of reach.
 
 Because the Balanz `Login` response returns only `user_type`, and the auth
 token is an opaque `user_id + password` concatenation that cannot be split
@@ -94,7 +98,9 @@ resume. It is cleared on sign-out.
 
 The drawer therefore holds one primary nav item (Groups & status, marked as
 current when it is) plus the understated utility actions (server settings,
-about) pinned to the bottom. Those are reached from the root, one step back
+about) pinned to the bottom. Choosing either of those closes the drawer
+before opening the panel, so a modal never stacks on top of a still-open
+drawer. Those are reached from the root, one step back
 from anywhere — so "back" and "menu" never contend for the same slot in the
 header. Sign out is not in the drawer; it's in the account menu on the
 identity chip, described below.

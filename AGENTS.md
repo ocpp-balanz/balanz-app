@@ -48,7 +48,11 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   actions (server settings, about). Keep navigation visually prominent and
   the utility actions understated.
 - Sign out belongs to the header's identity chip, not the drawer - the
-  account and the action that ends its session stay together.
+  account and the action that ends its session stay together. Because it is
+  the only route to sign out, the chip must be present on every screen and
+  must never be pushed out of reach by a long title.
+- Opening a modal panel should dismiss whatever opened it (e.g. the drawer)
+  rather than layering surfaces on top of each other.
 - The charger detail view should emphasize current OCPP status and session information.
 - Prefer direct manipulation over separate form controls where it fits: the
   dial itself is the current-limit control, applying once on release rather

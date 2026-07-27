@@ -20,6 +20,14 @@ export default function MenuDrawer({ open, currentView, onClose, onOpenGroups })
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
+  // Opening a panel dismisses the drawer first, so the modal lands on the
+  // app rather than stacking on top of a still-open drawer (which left two
+  // overlapping surfaces and two backdrops fighting each other).
+  function openPanel(setOpen) {
+    onClose();
+    setOpen(true);
+  }
+
   return (
     <>
       <button
@@ -71,10 +79,10 @@ export default function MenuDrawer({ open, currentView, onClose, onOpenGroups })
             header's identity chip (see UserMenu.jsx), next to the account it
             applies to. */}
         <div className="menu-footer">
-          <button type="button" className="menu-footer-item" onClick={() => setSettingsOpen(true)}>
+          <button type="button" className="menu-footer-item" onClick={() => openPanel(setSettingsOpen)}>
             Server settings
           </button>
-          <button type="button" className="menu-footer-item" onClick={() => setAboutOpen(true)}>
+          <button type="button" className="menu-footer-item" onClick={() => openPanel(setAboutOpen)}>
             About
           </button>
         </div>

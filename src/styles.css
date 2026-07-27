@@ -190,6 +190,10 @@ code {
 
 .main-header {
   align-items: center;
+  /* Keep the title row and the identity chip on one line: the chip is the
+     only route to sign out, so it must never wrap out of easy reach. Both
+     sides shrink instead (the title ellipsizes). */
+  flex-wrap: nowrap;
 }
 
 .header-left {
@@ -197,6 +201,7 @@ code {
   align-items: center;
   gap: 1rem;
   min-width: 0;
+  flex: 1 1 auto;
 }
 
 .app-header h1,

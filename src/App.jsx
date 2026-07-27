@@ -555,13 +555,11 @@ export default function App() {
           <h1>{view === 'dashboard' ? selectedCharger?.alias || 'Balanz' : 'Balanz'}</h1>
         </div>
 
-        {/* Who's signed in, and the account menu (sign out) - shown on the
-            root screen only. The charger view deliberately stays uncluttered
-            (its header already carries the charger's own name), and the
-            identity is one step back anyway. */}
-        {view === 'groups' ? (
-          <UserMenu userId={userId} userType={userType} onLogout={handleLogout} />
-        ) : null}
+        {/* Who's signed in, and the account menu. Shown on *every* screen:
+            sign out lives in here, so gating it on one view stranded anyone
+            who landed on the charger view - which is exactly what happens on
+            launch when a previously-selected charger is remembered. */}
+        <UserMenu userId={userId} userType={userType} onLogout={handleLogout} />
       </header>
 
       {(detailError || notice) && (
