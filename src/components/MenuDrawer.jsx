@@ -3,18 +3,20 @@ import React, { useState } from 'react';
 import AboutPanel from './AboutPanel';
 import SettingsPanel from './SettingsPanel';
 
-export default function MenuDrawer({
-  open,
-  chargers,
-  chargersLoading,
-  chargersError,
-  selectedChargerId,
-  onClose,
-  onSelectCharger,
-  onOpenGroups,
-  onRefreshChargers,
-  onLogout,
-}) {
+// A simple 4-square "overview" glyph for the Groups & status nav item -
+// nothing fancier is needed since there's only one primary destination.
+function GroupsNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor" />
+      <rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+      <rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor" opacity="0.55" />
+      <rect x="13" y="13" width="8" height="8" rx="2" fill="currentColor" />
+    </svg>
+  );
+}
+
+export default function MenuDrawer({ open, currentView, onClose, onOpenGroups }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -38,58 +40,42 @@ export default function MenuDrawer({
           </button>
         </div>
 
-        <div className="menu-section">
-          <h3>Groups</h3>
-          <button className="menu-action" type="button" onClick={onOpenGroups}>
-            View groups &amp; status
+        {/* Primary nav: this is the app's one real destination (the
+            per-charger dashboard is reached by picking a charger from here,
+            not via its own nav entry), so it's styled as a prominent
+            tappable row - icon, two-line label, accent fill - rather than a
+            plain boxed button, to visually read as *the* thing this drawer
+            is for. */}
+        <nav className="menu-nav">
+          <button
+            type="button"
+            className={`menu-nav-item ${currentView === 'groups' ? 'is-active' : ''}`}
+            aria-current={currentView === 'groups' ? 'page' : undefined}
+            onClick={onOpenGroups}
+          >
+            <span className="menu-nav-icon">
+              <GroupsNavIcon />
+            </span>
+            <span className="menu-nav-copy">
+              <strong>Groups &amp; status</strong>
+              <small>Browse chargers by group</small>
+            </span>
           </button>
-        </div>
+        </nav>
 
-        <div className="menu-section">
-          <div className="section-header">
-            <h3>Chargers</h3>
-            <button className="ghost-button" type="button" onClick={onRefreshChargers} disabled={chargersLoading}>
-              {chargersLoading ? 'Loading...' : 'Refresh'}
-            </button>
-          </div>
-
-          {chargersError ? <div className="alert alert-error">{chargersError}</div> : null}
-
-          <div className="menu-charger-list">
-            {!chargersLoading && chargers.length === 0 ? (
-              <div className="inline-state">No chargers returned by the backend.</div>
-            ) : null}
-
-            {chargers.map((charger) => {
-              const selected = charger.chargerId === selectedChargerId;
-              return (
-                <button
-                  key={charger.chargerId}
-                  type="button"
-                  className={`menu-charger-item ${selected ? 'is-selected' : ''}`}
-                  onClick={() => onSelectCharger(charger.chargerId)}
-                >
-                  <div className="menu-charger-label">{charger.alias}</div>
-                  <div className="menu-charger-meta">
-                    <span>{charger.chargerId}</span>
-                    <span>{charger.networkConnected ? charger.status : 'Offline'}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="menu-section">
-          <h3>Account</h3>
-          <button className="menu-action" type="button" onClick={() => setSettingsOpen(true)}>
+        {/* Utility actions - deliberately understated (plain text rows,
+            pinned to the bottom via margin-top: auto in CSS) so they read as
+            secondary to the nav above rather than competing with it, the
+            same way most drawer-based apps separate navigation from
+            settings. Sign out is deliberately *not* here: it lives on the
+            header's identity chip (see UserMenu.jsx), next to the account it
+            applies to. */}
+        <div className="menu-footer">
+          <button type="button" className="menu-footer-item" onClick={() => setSettingsOpen(true)}>
             Server settings
           </button>
-          <button className="menu-action" type="button" onClick={() => setAboutOpen(true)}>
+          <button type="button" className="menu-footer-item" onClick={() => setAboutOpen(true)}>
             About
-          </button>
-          <button className="menu-action danger" type="button" onClick={onLogout}>
-            Sign out
           </button>
         </div>
       </aside>

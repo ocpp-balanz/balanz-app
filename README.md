@@ -15,47 +15,92 @@ It runs in the browser during development and is wrapped with
 - Sign in with a Balanz user ID and password. Styling follows the same light
   Material Design palette as [balanz-ui](../balanz-ui) (the web dashboard) —
   MUI's default blue accent, Roboto, white panels on a light grey background.
-- View the currently selected charger's live OCPP status via a real circular
-  dial (offered current vs. the charger's max) plus session data (start
-  time, energy charged, estimated power, current draw, session user).
+- View a groups screen with basic allocation/usage status per group, plus
+  live per-charger stats, and pick a charger from any group. This is the
+  app's navigation root and its only charger picker — see "Navigation"
+  below.
+- View the selected charger's live OCPP status via a real circular dial
+  (offered current vs. the charger's max) plus session data (start time,
+  energy charged, estimated power, current draw, session user).
 - View a live, reusable step chart of offered vs. used current over the
   session's `charging_history` — the same `ChargingHistoryChart` component
   is meant to be reused later for browsing historic (closed) sessions, since
   it takes only a raw history array as input and has no fetch logic of its
   own.
-- Adjust the current limit on an active session, adjust session priority, or
-  stop a session — gated by the charger's group type and the signed-in
-  user's role (see "Group types & permissions" below).
-- Switch between chargers from the menu.
-- View a groups screen with basic allocation/usage status per group, and pick
-  a charger from any group.
+- Adjust the current limit on an active session by **dragging the dial
+  itself**, adjust session priority with a stepper, or start/stop a session
+  — gated by the charger's group type and the signed-in user's role (see
+  "Group types & permissions" and "Charger controls" below).
 - Sessions started without an RFID scan ("Free Vending" chargers) are shown
   with a "Free vending" badge instead of a misleading user name (see
   "Free Vending sessions" below).
 - The server address is configurable at runtime from a Settings panel
   (reachable pre-login and from the menu), not just at build time — see
-  "Server address (runtime setting)" below.
+  "Server address & refresh interval (runtime settings)" below.
 - On successful login, the app asks the browser/WebView to save the
   credential so it doesn't need to be retyped — see "Saving the login on
   Android" below.
-- The selected charger's data always refreshes automatically in the
-  background (`GetChargers`); the interval is a Settings panel field
-  (minimum 30s, default 60s) rather than a fixed value — see "Server address
-  (runtime setting)" below, which now also covers this. The groups list is
-  deliberately *not* polled in the background (only fetched once on login
-  and on demand via the Groups screen's own "Refresh" button), to avoid an
-  extra recurring `GetGroups` call on top of the charger's own refresh.
-- After a control action (current limit, priority, stop), an extra one-off
-  refresh runs 10s later on top of the immediate one, since the backend
-  needs a moment to actually apply the change.
-- The full charging graph opens in a large modal on demand (a "View
-  charging graph" button), instead of being squeezed into the page
-  permanently — see "Charging graph" below.
+- Data refreshes automatically in the background at a Settings-panel
+  interval (minimum 30s, default 60s) rather than a fixed value: the
+  selected charger's detail (`GetChargers`) whenever a charger is selected,
+  and the groups list (`GetGroups`) **only while the groups screen is
+  actually open**. Polling groups in the background from other screens would
+  be an extra recurring call on top of the charger's own refresh, for data
+  nobody is looking at. There are no manual "Refresh" buttons.
+- After a control action (current limit, priority, start, stop) the app
+  schedules a single one-off refresh 5s later — and deliberately does *not*
+  refresh immediately, since the backend needs a moment to apply the change
+  and an instant reload just redisplays the pre-change state.
+- The app version and build timestamp are shown under **About** in the menu
+  — see "Version & build info" below.
 
-All control actions (current limit changes, priority changes, stop) are
-routed through the centralized API client in `src/apiClient.js`, which owns
-the WebSocket connection, login/session state, retries/reconnects, and error
-handling.
+All control actions (current limit changes, priority changes, start, stop)
+are routed through the centralized API client in `src/apiClient.js`, which
+owns the WebSocket connection, login/session state, retries/reconnects, and
+error handling.
+
+## Navigation
+
+The app is a two-level hierarchy, navigated the standard way rather than via
+a menu of peer destinations:
+
+- **Groups & status is the root.** It lists every group (accordion-style,
+  collapsed by default) with each group's chargers and their live stats, and
+  is the only place chargers are picked. The hamburger in the header's
+  leading slot opens the drawer here.
+- **The charger dashboard is the detail view**, drilled into by tapping a
+  charger. Its header swaps the hamburger for a **back arrow** returning to
+  the groups list, and shows the charger's alias as the title.
+
+The root screen's header also shows **who is signed in**, top right: a pill
+with the user name and a caret. Clicking it opens the account menu, which
+repeats the name, adds the role, and is where **Sign out** lives — the
+identity and the action that ends it belong together, rather than sign-out
+sitting in the drawer away from any indication of whose session it would
+end. Signing out is behind that click rather than on the pill itself, so the
+pill stays a passive "who am I" indicator that can't be mis-tapped into
+ending the session.
+
+The pill deliberately shows only the name: the role is one click away in the
+menu, and Balanz user names are short enough that the full name fits even on
+a phone. The pill is omitted on the charger view, to keep that header to the
+charger's own name.
+
+Because the Balanz `Login` response returns only `user_type`, and the auth
+token is an opaque `user_id + password` concatenation that cannot be split
+back apart, the user id typed at sign-in is stored alongside the token
+purely so it can be displayed here — including after a stored-session
+resume. It is cleared on sign-out.
+
+The drawer therefore holds one primary nav item (Groups & status, marked as
+current when it is) plus the understated utility actions (server settings,
+about) pinned to the bottom. Those are reached from the root, one step back
+from anywhere — so "back" and "menu" never contend for the same slot in the
+header. Sign out is not in the drawer; it's in the account menu on the
+identity chip, described below.
+
+On launch the app opens the last-selected charger if one is remembered, and
+the groups list otherwise.
 
 ## Group types & permissions
 
@@ -79,11 +124,39 @@ offers an action the backend would reject:
 
 | Action | Required role(s) |
 | --- | --- |
-| Stop a session, set a current limit | `Admin` only |
+| Start a session, stop a session, set a current limit | `Admin` only |
 | Set session priority | `SessionPriority`, `Tags`, or `Admin` |
 
 Users without the right role see a plain explanation instead of a control
 that would just fail server-side.
+
+## Charger controls
+
+All of these live in the charger dashboard, directly on or under the dial:
+
+- **Current limit — drag the dial.** In non-allocation groups (and for
+  `Admin` users), the ring doubles as the control: dragging its handle sets
+  the limit. The change is applied once, on release (`SetTxProfile`), not on
+  every intermediate drag tick, so there's no separate "Apply" step and no
+  stream of backend calls mid-drag. Keyboard/arrow-key stepping is
+  deliberately not wired up, since each keypress would otherwise apply its
+  own change.
+  Valid set-points are **0 A or 6 A and above** — Balanz/OCPP won't accept
+  1–5 A, so the dial snaps out of that dead zone to whichever end is nearer.
+  0 A is genuinely useful: it makes the charger settle into `SuspendedEVSE`
+  rather than stopping the session.
+- **Start / stop — Play and Stop icon buttons** below the dial, shown only
+  to `Admin` users. Stopping issues `RemoteStopTransaction`. Starting opens
+  a small dialog first, because `RemoteStartTransaction` requires an
+  `id_tag` the backend cannot invent (a real session normally begins with an
+  RFID scan at the charger); the field is prefilled with the charger's own
+  id, the same convention this app already uses to detect and label
+  "Free vending" sessions.
+- **Session priority — a −/value/+ stepper** (allocation groups only),
+  applied with its own button.
+- **Charging graph — a QueryStats icon button** next to Play/Stop, matching
+  balanz-ui's own icon for the same thing. Unlike Play/Stop it isn't
+  Admin-gated: anyone who can see a session with history can view its graph.
 
 ## Free Vending sessions
 
@@ -105,8 +178,9 @@ without a developer involved.
 
 The same panel also sets the background refresh interval (in seconds,
 minimum 30, default 60) used for both the selected charger's detail and the
-groups list — the app always refreshes automatically at this interval;
-there is no on/off toggle.
+groups list (the latter only while the groups screen is open) — the app
+always refreshes automatically at this interval; there is no on/off toggle
+and no manual refresh button.
 
 Open Settings from the "Server settings" button on the sign-in screen (so it
 works before you've ever logged in) or from the hamburger menu once signed
@@ -125,13 +199,44 @@ See `getApiBaseUrl` / `setApiBaseUrl` / `clearApiBaseUrl` /
 ## Charging graph
 
 The step chart of offered vs. used current (`ChargingHistoryChart`) opens in
-a large modal via a "View charging graph" button at the bottom of the main
-overview card (no separate card of its own), rather than always rendering
-inline — at its default inline size it would be cramped and partially cut
-off the bottom of the screen on a phone. See `src/components/DialComponent.jsx`
-(the `graphOpen` state and the `.modal-panel.is-wide` modal) and
-`src/components/ChargingHistoryChart.jsx` (reused as-is, just rendered
-larger via its `height` prop).
+a wide modal via the QueryStats icon button next to Play/Stop, rather than
+always rendering inline — at its default inline size it would be cramped and
+partially cut off the bottom of the screen on a phone. See
+`src/components/DialComponent.jsx` (the `graphOpen` state and the
+`.modal-panel.is-wide` modal) and `src/components/ChargingHistoryChart.jsx`
+(reused as-is, just rendered larger via its `height` prop).
+
+The chart sizes itself from its container's *measured* width (a
+`ResizeObserver` feeding the SVG `viewBox`) instead of assuming a fixed one,
+and its height comes solely from the `height` prop. Both matter because SVG
+text scales with the ratio of rendered size to `viewBox` size: with a fixed
+guess, axis labels came out illegibly small on a narrow phone and oversized
+in the wide desktop modal, and a `height: auto` CSS rule additionally locked
+the chart's height to its width, stretching it into a tall, scrolling,
+mostly-empty column. Width and height are now independent.
+
+## Version & build info
+
+The **About** entry in the menu shows the app version and the build
+timestamp. Both are injected at build time by Vite's `define`
+(`vite.config.js`) and read back through `src/version.js`:
+
+- the version comes from `package.json`, so bumping a release means editing
+  one file;
+- the build date is captured when `vite build` / `vite dev` starts, since a
+  static bundle has no other way to know when it was produced.
+
+Because both are baked in at build time, a version bump is only visible
+after the bundle is rebuilt — editing `package.json` alone will not change
+what About reports:
+
+- **Rebuild** (`npm run build`) before serving `dist/` (Docker/nginx, or a
+  Capacitor `cap:sync`); a stale `dist/` keeps showing the old version.
+- **Restart the dev server** after a bump — `vite.config.js` reads
+  `package.json` once, when the config loads.
+- **Hard-reload the browser** if the version still looks stale. This app
+  registers a PWA service worker (`vite-plugin-pwa`), which serves the
+  previously cached bundle until it updates.
 
 ## Saving the login on Android
 
@@ -225,7 +330,7 @@ Native builds bake in `VITE_API_BASE_URL` as the *default* address at build
 time, so point it at a URL reachable from the device (not `localhost`)
 before building for a phone or emulator if possible. End users can also
 override it later from the in-app Settings panel without a rebuild — see
-"Server address (runtime setting)" above.
+"Server address & refresh interval (runtime settings)" above.
 
 ## Docker (serving the built app)
 
@@ -315,7 +420,8 @@ unused — the two modes coexist without conflicting.
 
 The app authenticates via the `Login` command, sending `token` as the
 concatenation of `user_id` and `password` (matched server-side against a
-sha256 in `users.csv`). Charger data comes from `GetChargers` /
+sha256 in `users.csv`). The response carries only `user_type` — see
+"Navigation" above for why the user id is stored client-side to display it. Charger data comes from `GetChargers` /
 `GetGroups`, matching the raw Balanz model shape:
 
 - `charger_id`, `alias`, `group_id`, `priority`, `description`, `conn_max`
@@ -330,10 +436,18 @@ allocation/SmartCharging group — see "Group types & permissions" above) and
 `max_allocation_now`.
 
 Control actions use `SetTxProfile` (current limit, Admin-only),
-`SetChargePriority` (session priority, `SessionPriority`/`Tags`/`Admin`) and
-`RemoteStopTransaction` (stop, Admin-only). See `src/apiClient.js` for the
+`SetChargePriority` (session priority, `SessionPriority`/`Tags`/`Admin`),
+`RemoteStartTransaction` (start, Admin-only — requires `charger_id`,
+`connector_id` and `id_tag`) and `RemoteStopTransaction` (stop, Admin-only —
+requires `charger_id` and `transaction_id`). See `src/apiClient.js` for the
 full mapping, normalization, and the `USER_TYPES` / `canControlCharging` /
 `canSetChargePriority` role helpers.
+
+Note that `energy_meter` is the meter's cumulative reading, not the energy
+delivered by the current session, so the app displays
+`energy_meter - meter_start` as "Energy charged". `meter_start` is usually 0
+(meters typically reset at session start), but where it isn't, the raw
+`energy_meter` would overstate the session considerably.
 
 ## Project structure
 
@@ -343,15 +457,18 @@ docker-compose.yml                Builds and runs the Dockerfile, publishing ngi
 nginx.conf.template                SPA fallback + optional /api reverse proxy (see "Docker" above), templated via envsubst at container start
 src/
   apiClient.js                    Centralized WebSocket API client (auth, calls, normalization, roles)
-  App.jsx                         Top-level state/routing (dashboard vs. groups view)
+  App.jsx                         Top-level state/routing (groups root vs. charger detail) + header nav
+  version.js                      Build-time injected app version / build date (see "Version & build info")
   styles.css                      Light theme (MUI-style palette matching balanz-ui)
   components/
     LoginScreen.jsx               Sign-in form, saves credential via Credential Management API
     SettingsPanel.jsx             Runtime server-address & refresh-interval editor (modal, reachable pre/post login)
-    MenuDrawer.jsx                Hamburger menu: groups nav, charger switcher, settings, sign out
-    GroupsScreen.jsx              Group status + charger picker
+    AboutPanel.jsx                Version / build date modal, opened from the menu
+    UserMenu.jsx                  Header identity chip + account menu (sign out)
+    MenuDrawer.jsx                Drawer: Groups & status nav item + settings/about footer
+    GroupsScreen.jsx              Group status + charger picker (the navigation root)
     DialComponent.jsx             Selected charger detail, session data, controls
-    ChargingDial.jsx / .css       Reusable circular ring gauge (offered / max current)
+    ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control
     ChargingHistoryChart.jsx/.css Reusable step chart of offered vs. usage current over time
     DialStyles.css                Styling for the charger detail view
 ```
@@ -362,8 +479,9 @@ src/
   flows.
 - The backend is treated as the source of truth — the app does not cache or
   guess charger state beyond what the API returns.
-- The upper-left hamburger menu is the main way to switch chargers, jump to
-  the groups screen, and sign out.
+- Chargers are switched from the Groups & status screen (the navigation
+  root), not from the menu — the drawer holds navigation to that screen plus
+  account actions. See "Navigation" above.
 - Balanz has no battery state-of-charge (%) or pricing data in its model, so
   the dial and controls intentionally show real backend-sourced metrics
   (current in Amps, estimated power) rather than inventing a percentage or
@@ -383,4 +501,10 @@ src/
 - `ChargingDial` and `ChargingHistoryChart` are hand-rolled SVG components
   (no charting library) to keep the app small, per the project's own
   "keep the codebase small and easy to reason about" guideline — even though
-  balanz-ui itself uses MUI + `@mui/x-charts`.
+  balanz-ui itself uses MUI + `@mui/x-charts`. Icons are likewise inline SVG
+  paths rather than an icon package; the graph icon reuses the exact path
+  data from MUI's `QueryStats` so it matches balanz-ui.
+- The dial's drag handler reports its final value through a ref rather than
+  reading component state: the pointer-up handler is captured once, at
+  pointer-down, so anything read from props/state at that moment would be
+  the value from that render, not where the user actually dragged to.

@@ -5,7 +5,6 @@ import {
   clearAuthToken,
   clearSelectedChargerId,
   fetchChargerDetails,
-  fetchChargers,
   fetchGroups,
   getRefreshIntervalSeconds,
   getStoredSelectedChargerId,
@@ -24,11 +23,29 @@ import DialComponent from './components/DialComponent';
 import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
 import MenuDrawer from './components/MenuDrawer';
+import UserMenu from './components/UserMenu';
 
 // Read once at module load - a changed interval takes effect after the
 // Settings panel's save-triggered reload, matching how the server address
 // override applies (see SettingsPanel.jsx).
 const REFRESH_INTERVAL_MS = getRefreshIntervalSeconds() * 1000;
+
+// Left-pointing "up/back" arrow for returning from a charger to the groups
+// list (the navigation root).
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        d="M15 5l-7 7 7 7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function formatError(error) {
   if (error instanceof ApiError || error instanceof Error) {
@@ -42,8 +59,13 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
   const [userType, setUserType] = useState('');
+  const [userId, setUserId] = useState('');
 
-  const [view, setView] = useState('dashboard'); // 'dashboard' | 'groups'
+  // 'groups' is the navigation root (the browsable list); 'dashboard' is the
+  // detail view drilled into from it. Start on the dashboard only when a
+  // previously-selected charger is remembered - otherwise there's nothing to
+  // show there, so the list is the sensible landing screen.
+  const [view, setView] = useState(() => (getStoredSelectedChargerId() ? 'dashboard' : 'groups'));
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [selectedChargerId, setSelectedChargerId] = useState(() => getStoredSelectedChargerId());
@@ -56,10 +78,6 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [draftMaxCurrent, setDraftMaxCurrent] = useState(null);
   const [draftPriority, setDraftPriority] = useState(null);
-
-  const [chargers, setChargers] = useState([]);
-  const [chargersLoading, setChargersLoading] = useState(false);
-  const [chargersError, setChargersError] = useState('');
 
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -82,8 +100,11 @@ export default function App() {
     setAuthLoading(false);
     setAuthError(message);
     setUserType('');
+    setUserId('');
     setMenuOpen(false);
-    setView('dashboard');
+    // Back to the navigation root - after a sign-out there's no selected
+    // charger left for the dashboard to show.
+    setView('groups');
     setSelectedChargerId('');
     clearSelectedChargerId();
     setSelectedCharger(null);
@@ -94,7 +115,6 @@ export default function App() {
     setDraftMaxCurrent(null);
     setDraftPriority(null);
     setDetailRefreshToken(0);
-    setChargers([]);
     setGroups([]);
   }
 
@@ -143,20 +163,6 @@ export default function App() {
     }
   }
 
-  async function loadChargers() {
-    setChargersLoading(true);
-    setChargersError('');
-    try {
-      const list = await fetchChargers();
-      setChargers(list);
-    } catch (error) {
-      if (handleAuthFailure(error)) return;
-      setChargersError(formatError(error));
-    } finally {
-      setChargersLoading(false);
-    }
-  }
-
   async function loadGroups({ quiet = false } = {}) {
     if (!quiet) {
       setGroupsLoading(true);
@@ -189,9 +195,10 @@ export default function App() {
       setAuthLoading(true);
       setAuthError('');
       try {
-        const { userType: restoredUserType } = await resumeStoredLogin();
+        const { userType: restoredUserType, userId: restoredUserId } = await resumeStoredLogin();
         if (!cancelled) {
           setUserType(restoredUserType);
+          setUserId(restoredUserId);
           setAuthState('authenticated');
         }
       } catch (error) {
@@ -213,27 +220,39 @@ export default function App() {
     };
   }, [authState]);
 
-  // Once authenticated, load the charger list and groups once (the latter
-  // is needed both for the Groups screen and to know whether the selected
-  // charger's group is SmartCharging-managed). Otherwise prompt via menu.
+  // Once authenticated, load groups once (needed both for the Groups screen
+  // and to know whether the selected charger's group is SmartCharging-
+  // managed). There's no separate flat charger list to fetch anymore -
+  // GroupsScreen's own per-group charger data is a strict superset of what
+  // that used to show. No need to force the menu open when nothing is
+  // selected either: `view` already defaults to the groups list in that
+  // case, which is a better landing spot than an empty dashboard.
   useEffect(() => {
     if (authState !== 'authenticated') {
       return undefined;
     }
-    void loadChargers();
     void loadGroups();
-    if (!selectedChargerId) {
-      setMenuOpen(true);
-    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState]);
 
-  // Groups are fetched once on login (above) and on demand via the Groups
-  // screen's own "Refresh" button - deliberately NOT polled in the
-  // background. The selected charger's own GetChargers refresh (below)
-  // already reflects that charger's live status, so a recurring GetGroups
-  // call on top of it was extra server load without extra value for the
-  // common case of watching a single charger.
+  // Groups are fetched once on login (above) and then periodically (quietly)
+  // while that screen is actually open - see the effect below. They're
+  // deliberately NOT polled while some other screen is showing: the selected
+  // charger's own GetChargers refresh already reflects that charger's live
+  // status, so a recurring GetGroups call on top of it would be extra server
+  // load without extra value for the common case of watching one charger.
+  useEffect(() => {
+    if (authState !== 'authenticated' || view !== 'groups') {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadGroups({ quiet: true });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, view]);
 
   // Load the selected charger's detail whenever the selection changes or a
   // mutation (apply limit/priority, stop) requests a refresh.
@@ -320,8 +339,9 @@ export default function App() {
     setAuthLoading(true);
     setAuthError('');
     try {
-      const { userType: loggedInUserType } = await loginRequest(credentials);
+      const { userType: loggedInUserType, userId: loggedInUserId } = await loginRequest(credentials);
       setUserType(loggedInUserType);
+      setUserId(loggedInUserId);
       setAuthState('authenticated');
       return true;
     } catch (error) {
@@ -498,31 +518,50 @@ export default function App() {
     <div className="app-shell">
       <MenuDrawer
         open={menuOpen}
-        chargers={chargers}
-        chargersLoading={chargersLoading}
-        chargersError={chargersError}
-        selectedChargerId={selectedChargerId}
+        currentView={view}
         onClose={() => setMenuOpen(false)}
-        onSelectCharger={handleSelectCharger}
         onOpenGroups={handleOpenGroups}
-        onRefreshChargers={loadChargers}
-        onLogout={handleLogout}
       />
 
+      {/* Standard hierarchical-navigation header: a single leading slot,
+          holding the hamburger at the root (groups list) and a back arrow
+          on the drilled-into charger view. The drawer is reached from the
+          root only - one step back from anywhere - so "back" and "menu"
+          never compete for the same spot. */}
       <header className="app-header main-header">
         <div className="header-left">
-          <button
-            className="menu-button"
-            type="button"
-            aria-label="Open menu"
-            onClick={() => setMenuOpen(true)}
-          >
-            <span />
-            <span />
-            <span />
-          </button>
-          <h1>Balanz</h1>
+          {view === 'dashboard' ? (
+            <button
+              className="menu-button"
+              type="button"
+              aria-label="Back to groups"
+              title="Back to groups"
+              onClick={() => setView('groups')}
+            >
+              <BackIcon />
+            </button>
+          ) : (
+            <button
+              className="menu-button"
+              type="button"
+              aria-label="Open menu"
+              onClick={() => setMenuOpen(true)}
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+          )}
+          <h1>{view === 'dashboard' ? selectedCharger?.alias || 'Balanz' : 'Balanz'}</h1>
         </div>
+
+        {/* Who's signed in, and the account menu (sign out) - shown on the
+            root screen only. The charger view deliberately stays uncluttered
+            (its header already carries the charger's own name), and the
+            identity is one step back anyway. */}
+        {view === 'groups' ? (
+          <UserMenu userId={userId} userType={userType} onLogout={handleLogout} />
+        ) : null}
       </header>
 
       {(detailError || notice) && (
@@ -540,8 +579,6 @@ export default function App() {
             error={groupsError}
             selectedChargerId={selectedChargerId}
             onSelectCharger={handleSelectCharger}
-            onRefresh={loadGroups}
-            onClose={() => setView('dashboard')}
           />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
@@ -566,7 +603,14 @@ export default function App() {
             {detailLoading ? (
               <div className="empty-state">Loading charger details...</div>
             ) : (
-              <div className="empty-state">Choose a charger from the menu.</div>
+              // Reachable only if a stored charger id no longer resolves -
+              // give a way out rather than a dead-end instruction.
+              <div className="empty-state">
+                <p>No charger selected.</p>
+                <button className="primary-button" type="button" onClick={() => setView('groups')}>
+                  Browse groups &amp; status
+                </button>
+              </div>
             )}
           </section>
         )}

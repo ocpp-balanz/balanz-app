@@ -91,8 +91,6 @@ export default function GroupsScreen({
   error,
   selectedChargerId,
   onSelectCharger,
-  onRefresh,
-  onClose,
 }) {
   // Which groups are expanded (accordion-style, like balanz-ui). Groups are
   // collapsed by default so the ~20-group list stays a short, scannable set
@@ -139,18 +137,16 @@ export default function GroupsScreen({
           <p className="section-kicker">Groups</p>
           <h2>Group status</h2>
         </div>
+        {/* No "back" affordance here - this screen is the navigation root
+            now (the charger dashboard is drilled into *from* here, and
+            returns via the header's back arrow), so the only action left is
+            the accordion expand/collapse toggle. */}
         <div className="header-actions">
           {groups.length > 0 ? (
             <button className="ghost-button" type="button" onClick={toggleAll}>
               {allExpanded ? 'Collapse all' : 'Expand all'}
             </button>
           ) : null}
-          <button className="ghost-button" type="button" onClick={onRefresh} disabled={loading}>
-            {loading ? 'Loading...' : 'Refresh'}
-          </button>
-          <button className="ghost-button" type="button" onClick={onClose}>
-            Back to charger
-          </button>
         </div>
       </div>
 

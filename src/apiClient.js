@@ -11,6 +11,12 @@
  */
 
 const AUTH_TOKEN_KEY = 'balanz.authToken';
+// The Login response carries only `user_type`, never the user's own id, and
+// the auth token is an opaque `user_id + password` concatenation that can't
+// be split back apart. So the id typed at sign-in is stored alongside the
+// token purely so the UI can show who is signed in, including after a
+// stored-session resume.
+const USER_ID_KEY = 'balanz.userId';
 const SELECTED_CHARGER_KEY = 'balanz.selectedChargerId';
 const API_BASE_URL_KEY = 'balanz.apiBaseUrl';
 const REFRESH_INTERVAL_KEY = 'balanz.refreshIntervalSeconds';
@@ -318,6 +324,7 @@ class BalanzWebsocketClient {
     this.ws = null;
     this.connected = false;
     this.userType = '';
+    this.userId = '';
     this.token = '';
     this.lastError = '';
     this._pending = new Map();
@@ -415,6 +422,7 @@ class BalanzWebsocketClient {
     this._shouldReconnect = false;
     this.token = '';
     this.userType = '';
+    this.userId = '';
     if (this._reconnectTimer) {
       window.clearTimeout(this._reconnectTimer);
       this._reconnectTimer = null;
@@ -436,7 +444,7 @@ class BalanzWebsocketClient {
     if (!username || !password) {
       throw new ApiError('InvalidLogin', 'A user ID and password are required.');
     }
-    return this._loginWithToken(token, { persist: true });
+    return this._loginWithToken(token, { persist: true, userId: username });
   }
 
   async resumeStoredLogin() {
@@ -444,10 +452,12 @@ class BalanzWebsocketClient {
     if (!token) {
       throw new ApiError('InvalidLogin', 'No stored session found.');
     }
-    return this._loginWithToken(token, { persist: false });
+    // The token can't be split back into user id + password, so the id comes
+    // from what was stored at sign-in time rather than from the token.
+    return this._loginWithToken(token, { persist: false, userId: getStoredUserId() });
   }
 
-  async _loginWithToken(token, { persist }) {
+  async _loginWithToken(token, { persist, userId = '' }) {
     this._shouldReconnect = true;
     await this.connect();
     const payload = await this.call('Login', { token });
@@ -456,10 +466,12 @@ class BalanzWebsocketClient {
     }
     this.token = token;
     this.userType = String(payload.user_type);
+    this.userId = String(userId || '').trim();
     if (persist) {
       storeAuthToken(token);
+      storeUserId(this.userId);
     }
-    return { userType: this.userType };
+    return { userType: this.userType, userId: this.userId };
   }
 
   async call(command, payload = {}, timeoutMs = CALL_TIMEOUT_MS) {
@@ -709,6 +721,7 @@ export async function resumeStoredLogin() {
 export function logout() {
   client.disconnect();
   clearAuthToken();
+  clearStoredUserId();
 }
 
 export function clearAuthToken() {
@@ -725,6 +738,20 @@ export function getStoredAuthToken() {
 
 export function storeAuthToken(token) {
   writeStorage(AUTH_TOKEN_KEY, token);
+}
+
+// The signed-in user's id, kept only so the UI can display it (see
+// USER_ID_KEY above for why it can't be recovered from the token).
+export function getStoredUserId() {
+  return readStorage(USER_ID_KEY, '');
+}
+
+export function storeUserId(userId) {
+  writeStorage(USER_ID_KEY, userId);
+}
+
+export function clearStoredUserId() {
+  writeStorage(USER_ID_KEY, '');
 }
 
 export function getStoredSelectedChargerId() {

@@ -208,6 +208,13 @@ code {
 .app-header h1 {
   font-size: clamp(1.4rem, 3.4vw, 1.9rem);
   color: var(--accent-contrast);
+  /* On the charger view this holds the charger alias, which can be long -
+     truncate rather than wrap, so the trailing overflow button keeps its
+     place. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-header .eyebrow {
@@ -236,9 +243,96 @@ code {
   justify-content: flex-end;
 }
 
+/* Signed-in identity, top-right of the root screen's header: a translucent
+   pill on the accent-coloured header (same treatment as .menu-button) with
+   an initials chip. It's also the account menu trigger - sign out lives in
+   the popover below rather than in the drawer. */
+.header-user-wrap {
+  position: relative;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--accent-contrast);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.header-user-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-user-caret {
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: transform 0.15s ease;
+}
+
+.header-user[aria-expanded='true'] .header-user-caret {
+  transform: rotate(180deg);
+}
+
+.header-user:hover,
+.header-user[aria-expanded='true'] {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+/* The popover itself - a normal light panel, so it reads as content rather
+   than part of the accent-coloured header it hangs off. */
+.header-user-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 40;
+  min-width: 12rem;
+  padding: 0.5rem;
+  display: grid;
+  gap: 0.25rem;
+  color: var(--text-color);
+}
+
+.header-user-menu-head {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 0.15rem;
+}
+
+.header-user-menu-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-user-menu-head small {
+  color: var(--muted-text);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+
 .menu-button {
   width: 2.6rem;
   height: 2.6rem;
+  flex-shrink: 0;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.4);
   background: rgba(255, 255, 255, 0.12);
@@ -346,6 +440,19 @@ code {
 .empty-state {
   color: var(--muted-text);
   padding: 1rem 0;
+}
+
+/* The dashboard's "no charger selected" state carries a call-to-action
+   button, so centre its contents rather than leaving them flush left. */
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.empty-state p {
+  margin: 0;
 }
 
 .charger-list {
@@ -555,8 +662,12 @@ code {
   transform: translateX(-102%);
   transition: transform 0.24s ease;
   z-index: 30;
-  display: grid;
-  gap: 1rem;
+  /* flex (not grid) so .menu-footer below can push itself to the bottom via
+     margin-top: auto, keeping account actions visually separate from and
+     subordinate to the primary nav above. */
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
   overflow-y: auto;
   background: var(--panel);
   box-shadow: 0 20px 60px rgba(16, 24, 40, 0.25);
@@ -573,64 +684,98 @@ code {
   gap: 1rem;
 }
 
-.menu-section {
+/* Primary nav item(s) - given weight (icon chip, two-line label, tinted
+   background) so this reads as "the" thing the drawer is for. */
+.menu-nav {
   display: grid;
-  gap: 0.75rem;
+  gap: 0.5rem;
 }
 
-.menu-section h3 {
-  margin: 0;
-  font-size: 1rem;
-}
-
-.menu-charger-list {
-  display: grid;
-  gap: 0.6rem;
-}
-
-.menu-charger-item {
-  text-align: left;
-  border: 1px solid var(--border-color);
-  background: var(--panel-alt);
-  color: var(--text-color);
-  border-radius: 10px;
-  padding: 0.85rem;
-  cursor: pointer;
-  display: grid;
-  gap: 0.35rem;
-}
-
-.menu-charger-item.is-selected {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.menu-charger-label {
-  font-weight: 700;
-}
-
-.menu-charger-meta {
+.menu-nav-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem 0.75rem;
-  color: var(--muted-text);
-  font-size: 0.86rem;
-}
-
-.menu-action {
-  border: 1px solid var(--border-color);
-  background: var(--panel-alt);
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  border: none;
+  background: var(--accent-soft);
   color: var(--text-color);
-  border-radius: 10px;
-  padding: 0.8rem 0.95rem;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
   cursor: pointer;
   text-align: left;
+  transition: transform 0.15s ease;
 }
 
-.menu-action.danger {
-  border-color: transparent;
-  background: var(--error-bg);
+.menu-nav-item:hover {
+  transform: translateY(-1px);
+}
+
+/* Marks the nav item matching the screen currently on display, so opening
+   the drawer from the groups list doesn't look like a way to go somewhere
+   new. */
+.menu-nav-item.is-active {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.menu-nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.menu-nav-copy {
+  display: grid;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.menu-nav-copy strong {
+  font-size: 1.02rem;
+}
+
+.menu-nav-copy small {
+  color: var(--muted-text);
+  font-size: 0.8rem;
+}
+
+/* Account/utility actions - plain, muted text rows pinned to the bottom of
+   the drawer, deliberately understated relative to .menu-nav-item above. */
+.menu-footer {
+  margin-top: auto;
+  display: grid;
+  gap: 0.1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.menu-footer-item {
+  border: none;
+  background: transparent;
+  color: var(--muted-text);
+  padding: 0.6rem 0.35rem;
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.menu-footer-item:hover {
+  background: var(--panel-alt);
+  color: var(--text-color);
+}
+
+.menu-footer-item.is-danger {
   color: var(--error);
+}
+
+.menu-footer-item.is-danger:hover {
+  background: var(--error-bg);
 }
 
 /* Shared centered-modal chrome, used by the Settings panel and the
@@ -740,4 +885,5 @@ code {
   .menu-drawer {
     width: min(100vw, 92vw);
   }
+
 }
