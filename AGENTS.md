@@ -88,5 +88,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   actual build output (`dist/`) if the build tooling or output path changes -
   this is the served path for devices (e.g. iOS Safari) that can't run the
   Vite dev server or a Capacitor build directly.
+- The app is installable as a PWA, so a deployment only reaches installed
+  copies if `index.html` and `sw.js` are served `no-cache` and something
+  triggers an update check. Do not add caching headers that let those two go
+  stale, and keep the update polling in `src/main.jsx` - see "Deploying
+  updates to an installed PWA" in the README.
 - Prefer changes that improve browser and mobile parity together.
 - Use `VITE_API_BASE_URL=http://localhost:8000` when testing against the local gateway.

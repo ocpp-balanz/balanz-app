@@ -17,7 +17,14 @@ export default defineConfig({
       // Ships alongside the Capacitor native build, not instead of it - lets
       // the same web bundle be "Add to Home Screen"-installed on platforms
       // where the native app isn't (or can't yet be) installed.
+      //
+      // autoUpdate: a new service worker activates and takes over without
+      // prompting. Registration is done by hand in src/main.jsx (hence
+      // injectRegister: null) so it can also poll for updates - see the
+      // comment there for why registration-time checking isn't enough for an
+      // installed app.
       registerType: 'autoUpdate',
+      injectRegister: null,
       manifest: {
         name: 'Balanz Charging Monitor',
         short_name: 'Balanz',

@@ -237,12 +237,45 @@ after the bundle is rebuilt — editing `package.json` alone will not change
 what About reports:
 
 - **Rebuild** (`npm run build`) before serving `dist/` (Docker/nginx, or a
-  Capacitor `cap:sync`); a stale `dist/` keeps showing the old version.
+  Capacitor `cap:sync`); a stale `dist/` keeps showing the old version. With
+  Docker, `dist/` is baked into the image, so rebuild the image
+  (`docker compose up --build`) — rebuilding only on the host changes
+  nothing the container serves.
 - **Restart the dev server** after a bump — `vite.config.js` reads
   `package.json` once, when the config loads.
-- **Hard-reload the browser** if the version still looks stale. This app
-  registers a PWA service worker (`vite-plugin-pwa`), which serves the
-  previously cached bundle until it updates.
+- If an **installed PWA** still shows the old version, see "Deploying
+  updates to an installed PWA" below.
+
+## Deploying updates to an installed PWA
+
+An installed (Add to Home Screen) copy is served by a service worker, so a
+new deployment only reaches it once that worker updates. Three things have
+to line up, and all three are configured in this repo:
+
+1. **The server must not cache the entry points.** `index.html` names the
+   current build's content-hashed asset files, and `sw.js` is what the
+   browser checks for updates. Without an explicit `Cache-Control`, nginx
+   sends only `Last-Modified`/`ETag` and browsers apply *heuristic* caching
+   — inventing their own freshness lifetime and potentially serving a stale
+   `index.html` for a long time, which pins the app to the old bundle no
+   matter what the service worker is set to do. `nginx.conf.template`
+   therefore serves `index.html`, `sw.js` and the manifest as `no-cache`,
+   while `/assets/` (content-hashed, so a change always means a new name)
+   is cached immutably for a year.
+2. **The worker updates without prompting** — `registerType: 'autoUpdate'`
+   in `vite.config.js`.
+3. **Something has to trigger the check.** `autoUpdate` only checks at
+   registration time, i.e. on page load, and an installed app is usually
+   *resumed* rather than reloaded. `src/main.jsx` registers the worker
+   itself (hence `injectRegister: null`) and additionally calls
+   `registration.update()` hourly and whenever the app returns to the
+   foreground.
+
+If an install is already stuck on an old build from before these were in
+place, relaunching it once or twice should recover it (the browser
+re-fetches `sw.js` bypassing the HTTP cache). Failing that, open the same
+URL in a normal browser tab and hard-reload, or uninstall and re-add the
+app.
 
 ## Saving the login on Android
 
@@ -477,6 +510,7 @@ Dockerfile                        Multi-stage build: npm build -> nginx serving 
 docker-compose.yml                Builds and runs the Dockerfile, publishing nginx on HOST_PORT (default 8081)
 nginx.conf.template                SPA fallback + optional /api reverse proxy (see "Docker" above), templated via envsubst at container start
 src/
+  main.jsx                        React entry point; also registers the PWA service worker + update polling
   apiClient.js                    Centralized WebSocket API client (auth, calls, normalization, roles)
   App.jsx                         Top-level state/routing (groups root vs. charger detail) + header nav
   version.js                      Build-time injected app version / build date (see "Version & build info")

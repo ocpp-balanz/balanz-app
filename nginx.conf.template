@@ -15,9 +15,42 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # --- Caching -----------------------------------------------------------
+    # Without explicit Cache-Control, nginx sends only Last-Modified/ETag and
+    # browsers fall back to *heuristic* caching - they invent a freshness
+    # lifetime and may serve index.html and sw.js from cache for a long time.
+    # For an installed PWA that means it keeps booting the old index.html,
+    # which references the previous build's hashed asset filenames, so a new
+    # deployment is never picked up no matter what registerType the service
+    # worker uses. The rules below make the two entry points revalidate every
+    # time, while letting the immutable hashed assets cache aggressively.
+
+    # Content-hashed filenames (index-<hash>.js/.css, images) - a changed file
+    # always means a changed name, so these can be cached indefinitely.
+    # (No `expires` directive here: it emits its own Cache-Control, which
+    # would land alongside the add_header one as a duplicate header.)
+    location /assets/ {
+        add_header Cache-Control "public, max-age=31536000, immutable";
+        try_files $uri =404;
+    }
+
+    # The service worker and the manifest must always be revalidated,
+    # otherwise the update check itself goes stale. (There is no
+    # registerSW.js to serve - registration happens inside the app bundle,
+    # see src/main.jsx.)
+    location = /sw.js {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
     # Single-page app: any path not matching a real file falls back to
     # index.html rather than 404ing (there's no server-side routing to do).
+    # index.html is never cached - it's the pointer to every hashed asset.
     location / {
+        add_header Cache-Control "no-cache, must-revalidate";
         try_files $uri $uri/ /index.html;
     }
 
