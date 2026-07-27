@@ -249,6 +249,22 @@ partially cut off the bottom of the screen on a phone. See
 `.modal-panel.is-wide` modal) and `src/components/ChargingHistoryChart.jsx`
 (reused as-is, just rendered larger via its `height` prop).
 
+The x-axis zooms and pans (wheel/trackpad, or pinch and drag on touch) so a
+brief spike stays inspectable in a session spanning hours. `touch-action:
+none` hands those gestures entirely to the chart — relying on the browser's
+own pinch-zoom is not an option, since an installed PWA generally discards
+page zoom as soon as the fingers lift.
+
+All of the gesture maths reads the current domain through a ref rather than
+the enclosing render's variables. The window `pointermove`/`pointerup`
+listeners are attached once, on the first `pointerdown`, so they keep running
+that render's closure for the whole gesture even as zooming re-renders
+continuously. Reading the domain from the closure meant that lifting one
+finger of a pinch re-based the follow-on pan on the *pre-pinch* window, so
+the next scrap of movement discarded the zoom and snapped roughly back to the
+start — intermittent-looking, because it only bit when the remaining finger
+moved before leaving the glass.
+
 The chart sizes itself from its container's *measured* width (a
 `ResizeObserver` feeding the SVG `viewBox`) instead of assuming a fixed one,
 and its height comes solely from the `height` prop. Both matter because SVG

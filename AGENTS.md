@@ -71,6 +71,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 - Prefer direct manipulation over separate form controls where it fits: the
   dial itself is the current-limit control, applying once on release rather
   than on every drag tick.
+- Gesture handlers attached to `window` outlive the render that created them,
+  so any value they act on (a zoom domain, a drag baseline) must be read
+  through a ref, not captured from the enclosing closure. Multi-touch makes
+  this bite intermittently, which is hard to spot in testing.
 - Display user-friendly charger aliases before technical charger IDs.
 - Session data should highlight start time, kWh charged, current power, current amperage, and recent history.
 - Background refreshes should update state without forcing manual page reloads.

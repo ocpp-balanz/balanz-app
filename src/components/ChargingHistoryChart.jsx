@@ -78,6 +78,16 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
   // same window-listener pattern as ChargingDial's drag handling.
   const pointersRef = useRef(new Map());
   const gestureRef = useRef(null);
+  // Live mirror of the render values the gesture math needs. The window
+  // pointermove/pointerup listeners are attached once, on the first
+  // pointerdown, so they keep executing the closure from *that* render for
+  // the whole gesture - even though zooming re-renders continuously. Reading
+  // the domain straight out of that closure meant lifting one finger of a
+  // pinch re-baselined the follow-on pan against the pre-pinch window, so the
+  // next scrap of movement threw the zoom away and snapped roughly back to
+  // where it started. A ref is stable across renders, so reading through it
+  // always yields current values regardless of which render's closure runs.
+  const liveRef = useRef(null);
 
   // All hooks below run on every render regardless of the "not enough data"
   // early return further down, to satisfy React's rules of hooks - each
@@ -159,28 +169,46 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
   const yTicks = buildYTicks(maxValue);
   const xTicks = buildXTicks(domainStart, domainEnd);
 
+  // Refreshed every render; see the comment on liveRef above.
+  liveRef.current = {
+    minTs,
+    maxTs,
+    fullSpan,
+    minVisibleSpan,
+    domainStart,
+    domainEnd,
+    domainSpan,
+    plotWidth,
+  };
+
   // Clamps a candidate {start, end} window to the data's actual range,
   // preserving span where possible - only shrinking it against the min
   // span, or sliding it back if it would run past an edge.
+  // Every function below reads its geometry from liveRef.current rather than
+  // the enclosing render's variables, so it behaves identically whether it's
+  // called from the current render or from a window listener still holding an
+  // older closure (see liveRef's comment).
   function clampRange(start, end) {
-    let span = Math.min(end - start, fullSpan);
-    span = Math.max(span, minVisibleSpan);
+    const live = liveRef.current;
+    let span = Math.min(end - start, live.fullSpan);
+    span = Math.max(span, live.minVisibleSpan);
     let nextStart = start;
     let nextEnd = nextStart + span;
-    if (nextStart < minTs) {
-      nextStart = minTs;
+    if (nextStart < live.minTs) {
+      nextStart = live.minTs;
       nextEnd = nextStart + span;
     }
-    if (nextEnd > maxTs) {
-      nextEnd = maxTs;
+    if (nextEnd > live.maxTs) {
+      nextEnd = live.maxTs;
       nextStart = nextEnd - span;
     }
-    return { start: Math.max(nextStart, minTs), end: Math.min(nextEnd, maxTs) };
+    return { start: Math.max(nextStart, live.minTs), end: Math.min(nextEnd, live.maxTs) };
   }
 
   function applyRange(start, end) {
+    const live = liveRef.current;
     const clamped = clampRange(start, end);
-    if (clamped.start <= minTs && clamped.end >= maxTs) {
+    if (clamped.start <= live.minTs && clamped.end >= live.maxTs) {
       setViewRange(null);
     } else {
       setViewRange(clamped);
@@ -188,21 +216,23 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
   }
 
   function clientXToTimestamp(clientX) {
+    const live = liveRef.current;
     const rect = svgRef.current.getBoundingClientRect();
-    const fraction = (clientX - rect.left - PAD_LEFT) / plotWidth;
-    return domainStart + fraction * domainSpan;
+    const fraction = (clientX - rect.left - PAD_LEFT) / live.plotWidth;
+    return live.domainStart + fraction * live.domainSpan;
   }
 
   function handleWheel(event) {
     event.preventDefault();
+    const live = liveRef.current;
     const anchorTs = clientXToTimestamp(event.clientX);
     // Whichever axis moved more carries the gesture's intended direction -
     // see the file-level comment on why both axes always zoom rather than
     // treating a horizontal-dominant scroll as a pan.
     const primaryDelta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
     const factor = primaryDelta < 0 ? 1 / WHEEL_ZOOM_STEP : WHEEL_ZOOM_STEP;
-    const newSpan = Math.min(fullSpan, Math.max(minVisibleSpan, domainSpan * factor));
-    const anchorFraction = (anchorTs - domainStart) / domainSpan;
+    const newSpan = Math.min(live.fullSpan, Math.max(live.minVisibleSpan, live.domainSpan * factor));
+    const anchorFraction = (anchorTs - live.domainStart) / live.domainSpan;
     const newStart = anchorTs - anchorFraction * newSpan;
     applyRange(newStart, newStart + newSpan);
   }
@@ -212,21 +242,25 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
   // during a pinch smoothly falls back to a single-finger pan instead of
   // jumping.
   function startGesture() {
+    const live = liveRef.current;
     const xs = [...pointersRef.current.values()];
     if (xs.length >= 2) {
       gestureRef.current = {
         mode: 'pinch',
         startDist: Math.abs(xs[0] - xs[1]) || 1,
         anchorTs: clientXToTimestamp((xs[0] + xs[1]) / 2),
-        startDomainStart: domainStart,
-        startDomainSpan: domainSpan,
+        startDomainStart: live.domainStart,
+        startDomainSpan: live.domainSpan,
       };
     } else if (xs.length === 1) {
+      // Reached when a pinch drops to one finger, so this baseline must be
+      // the *just-zoomed* domain - taking it from the enclosing closure was
+      // what reverted the zoom on finger-lift.
       gestureRef.current = {
         mode: 'pan',
         startX: xs[0],
-        startDomainStart: domainStart,
-        startDomainEnd: domainEnd,
+        startDomainStart: live.domainStart,
+        startDomainEnd: live.domainEnd,
       };
     } else {
       gestureRef.current = null;
@@ -243,9 +277,11 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
       return;
     }
 
+    const live = liveRef.current;
+
     if (gesture.mode === 'pan') {
       const deltaPx = event.clientX - gesture.startX;
-      const deltaTs = -(deltaPx / plotWidth) * (gesture.startDomainEnd - gesture.startDomainStart);
+      const deltaTs = -(deltaPx / live.plotWidth) * (gesture.startDomainEnd - gesture.startDomainStart);
       applyRange(gesture.startDomainStart + deltaTs, gesture.startDomainEnd + deltaTs);
       return;
     }
@@ -256,7 +292,7 @@ const ChargingHistoryChart = forwardRef(function ChargingHistoryChart(
     }
     const dist = Math.abs(xs[0] - xs[1]) || 1;
     const ratio = dist / gesture.startDist;
-    const newSpan = Math.min(fullSpan, Math.max(minVisibleSpan, gesture.startDomainSpan / ratio));
+    const newSpan = Math.min(live.fullSpan, Math.max(live.minVisibleSpan, gesture.startDomainSpan / ratio));
     const anchorFraction = (gesture.anchorTs - gesture.startDomainStart) / gesture.startDomainSpan;
     const newStart = gesture.anchorTs - anchorFraction * newSpan;
     applyRange(newStart, newStart + newSpan);
