@@ -85,6 +85,12 @@ export function canViewLogs(userType) {
   return userType === USER_TYPES.ADMIN;
 }
 
+// GetSessions is listed for Analysis (and therefore Tags, which extends it),
+// plus Admin - a wider audience than the control commands.
+export function canViewSessions(userType) {
+  return [USER_TYPES.ANALYSIS, USER_TYPES.TAGS, USER_TYPES.ADMIN].includes(userType);
+}
+
 // Balanz routes audit entries through a logger literally named "AUDIT"
 // (balanz/audit_logger.py); everything else in the buffer is ordinary
 // application logging.
@@ -338,6 +344,44 @@ function normalizeTag(source = {}) {
     parentIdTag: source.parent_id_tag ?? null,
     status: source.status ?? null,
     priority: toNumber(source.priority, 0),
+    raw: source,
+  };
+}
+
+/**
+ * A closed (historic) session from GetSessions.
+ *
+ * Note `energy_meter` here is *not* the same quantity as on a live
+ * transaction: a stored session records the delta already
+ * (`meter_stop - meter_start`), so unlike normalizeTransaction this must not
+ * subtract a meter start again or every historic session would read 0.
+ */
+function normalizeSession(source = {}) {
+  const chargerId = String(source.charger_id ?? '').trim();
+  const idTag = source.id_tag ?? null;
+  const userName = source.user_name ?? null;
+  const energyWh = toNullableNumber(source.energy_meter);
+
+  return {
+    sessionId: source.session_id ?? '',
+    chargerId,
+    chargerAlias: source.charger_alias ?? '',
+    groupId: source.group_id ?? null,
+    idTag,
+    userName,
+    stopIdTag: source.stop_id_tag ?? null,
+    isFreeVending: detectFreeVending(idTag, userName, chargerId),
+    // Epoch seconds; duration in seconds.
+    startTime: toNullableNumber(source.start_time),
+    endTime: toNullableNumber(source.end_time),
+    durationSeconds: toNullableNumber(source.duration),
+    // `kwh` is the backend's own preformatted string; fall back to it only if
+    // the raw Wh figure is missing.
+    energyKwh: energyWh !== null ? energyWh / 1000 : toNullableNumber(source.kwh),
+    reason: source.reason ?? null,
+    chargingHistory: Array.isArray(source.charging_history)
+      ? source.charging_history.map(normalizeChargingHistoryEntry)
+      : [],
     raw: source,
   };
 }
@@ -639,6 +683,28 @@ class BalanzWebsocketClient {
   }
 
   /**
+   * Historic sessions, optionally narrowed to one charger or group.
+   *
+   * Unlike GetLogs there is no time filter and no limit - the backend returns
+   * every stored session for the selection - so any date windowing is done
+   * client-side. Closed sessions per charger are a modest number, so that's
+   * a fair trade for a much simpler call.
+   *
+   * `include_live` additionally folds the currently-running transaction in as
+   * a synthetic session; left off here, since the charger screen already
+   * shows the live session in far more detail.
+   */
+  async fetchSessions({ chargerId, groupId, includeLive = false } = {}) {
+    const payload = {};
+    if (chargerId) payload.charger_id = chargerId;
+    if (groupId) payload.group_id = groupId;
+    if (includeLive) payload.include_live = true;
+
+    const list = await this.call('GetSessions', payload);
+    return (Array.isArray(list) ? list : []).map(normalizeSession);
+  }
+
+  /**
    * OCPP Reset. `type` is "Soft" (restart the charge point's application,
    * ending transactions gracefully) or "Hard" (reboot as if power-cycled).
    * The backend defaults to Soft when the field is missing, but this always
@@ -883,6 +949,10 @@ export const RESET_TYPES = { SOFT: 'Soft', HARD: 'Hard' };
 
 export async function resetCharger(payload) {
   return client.resetCharger(payload);
+}
+
+export async function fetchSessions(filters) {
+  return client.fetchSessions(filters);
 }
 
 export function getConnectionStatus() {

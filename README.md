@@ -71,6 +71,8 @@ a menu of peer destinations:
 - **The charger dashboard is the detail view**, drilled into by tapping a
   charger. Its header swaps the hamburger for a **back arrow** returning to
   the groups list, and shows the charger's alias as the title.
+- **Sessions** (past sessions for that charger) open from the icon row under
+  the dial; back returns to the charger. See "Sessions" below.
 - **Logs** open either from the icon row under the dial (seeded to that
   charger, back returns there) or from the drawer as a standalone tool (back
   returns to the root). See "Logs" below.
@@ -174,6 +176,7 @@ offers an action the backend would reject:
 | Reset (reboot) a charger | `Admin` only |
 | View the audit log (`GetLogs`) | `Admin` only |
 | Set session priority | `SessionPriority`, `Tags`, or `Admin` |
+| View past sessions (`GetSessions`) | `Analysis`, `Tags`, or `Admin` |
 
 Users without the right role see a plain explanation instead of a control
 that would just fail server-side.
@@ -214,6 +217,36 @@ All of these live in the charger dashboard, directly on or under the dial:
   mirroring balanz-ui's own dialog. Keeping both behind the confirmation
   means a disruptive reboot is never one stray tap away. `type` is sent
   explicitly rather than relying on the backend's Soft default.
+
+## Sessions
+
+The history icon under the dial opens that charger's past sessions — a full
+screen in the same style as Logs, with the back arrow returning to the
+charger. Period chips are **Last month** (default), **Last year** and
+**All** — kept short because they're purely a client-side view over data
+already fetched, so "All" costs nothing extra. Sessions are grouped into
+**subtotals per week or month** (selectable), each
+group heading carrying its session count, total energy and total charging
+time, with a running total for the whole period above the list. Sessions read
+newest-first, matching balanz-ui's own session table.
+
+Each session shows start, end, duration, energy, user and stop reason, and —
+where the stored `charging_history` has enough points — opens the *same*
+`ChargingHistoryChart` used for the live session. That reuse is why the
+component was written to take only a raw history array with no fetching of
+its own.
+
+Two API details worth knowing:
+
+- **`GetSessions` is broader than the control commands**: it's allowed for
+  `Analysis` and `Tags` as well as `Admin`, so the icon appears for those
+  roles too.
+- **A stored session's `energy_meter` is already the delta**
+  (`meter_stop - meter_start`), unlike a *live* transaction's cumulative
+  reading. Subtracting a meter start again — as the charger screen correctly
+  does for the running session — would make every historic session read 0.
+- There is **no date filter and no limit** on the call, so the period is
+  applied client-side over the charger's (bounded) set of stored sessions.
 
 ## Logs
 
@@ -643,6 +676,7 @@ src/
     UserMenu.jsx                  Header identity chip + account menu (sign out)
     MenuDrawer.jsx                Drawer: Groups & status + Logs nav items, settings/about footer
     GroupsScreen.jsx              Group status + charger picker (the navigation root)
+    SessionsScreen.jsx / .css     Past sessions with week/month subtotals, reusing ChargingHistoryChart
     LogsScreen.jsx / .css         Log viewer: time range, log type and message search (Admin only)
     DialComponent.jsx             Selected charger detail, session data, controls
     ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control

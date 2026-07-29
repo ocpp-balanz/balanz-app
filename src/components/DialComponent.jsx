@@ -105,6 +105,18 @@ function QueryStatsIcon() {
   );
 }
 
+// Material's "history" - a clock with a counter-clockwise arrow.
+function HistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"
+      />
+    </svg>
+  );
+}
+
 // Material's "restart_alt" - the same icon balanz-ui uses for this action.
 function RestartIcon() {
   return (
@@ -148,6 +160,7 @@ export default function DialComponent({
   onStartTransaction,
   onStopTransaction,
   onOpenLogs,
+  onOpenSessions,
   onResetCharger,
   isAllocationGroup,
   userType,
@@ -222,6 +235,10 @@ export default function DialComponent({
   // Reset is Admin-only too, and the backend rejects it outright when the
   // charger has no live OCPP link - there's nothing to send the command to.
   const canReset = isAdmin && Boolean(onResetCharger) && Boolean(charger.networkConnected);
+  // GetSessions reaches a wider audience than the control commands (Analysis
+  // and Tags as well as Admin), so App decides and passes the handler only
+  // when the role allows it.
+  const canSeeSessions = Boolean(onOpenSessions);
   // Direct current-limit control only makes sense outside SmartCharging
   // groups (Balanz's own allocation loop owns the offer there).
   const isDirectControl = canStop && !isAllocationGroup && isAdmin;
@@ -373,7 +390,7 @@ export default function DialComponent({
             </div>
           ) : null}
 
-          {isAdmin || hasGraphAccess || canSeeLogs || canReset ? (
+          {isAdmin || hasGraphAccess || canSeeLogs || canSeeSessions || canReset ? (
             <div className="dial-transport-row">
               {isAdmin ? (
                 canStop ? (
@@ -410,6 +427,18 @@ export default function DialComponent({
                   title="View charging graph"
                 >
                   <QueryStatsIcon />
+                </button>
+              ) : null}
+
+              {canSeeSessions ? (
+                <button
+                  type="button"
+                  className="icon-button icon-button-sessions"
+                  onClick={onOpenSessions}
+                  aria-label="View past sessions"
+                  title="View past sessions"
+                >
+                  <HistoryIcon />
                 </button>
               ) : null}
 

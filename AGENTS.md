@@ -19,6 +19,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 - The header stays pinned to the top of the viewport on every screen; its
   controls must not require scrolling to reach. Keep it below the drawer and
   modal layers in the z-order so those still cover it.
+- Past sessions are viewed per charger, one level below the charger screen,
+  with selectable week/month subtotals. Like Logs, this is intended to become
+  an overall (all-charger) function later, so keep the screen driven by props
+  rather than assuming a single charger.
 - Logs (Admin only) are one screen with two entry points: seeded to a charger
   from its icon row, or unseeded from the drawer as a standalone tool. Balanz
   log records carry no charger field, so "per charger" is necessarily a

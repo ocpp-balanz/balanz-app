@@ -91,8 +91,12 @@
   background: var(--info);
 }
 
-/* Audit log - another read-only view action, so it shares the graph icon's
-   neutral treatment rather than a control colour. */
+/* Past sessions and the audit log - read-only view actions, so they share
+   the graph icon's neutral treatment rather than a control colour. */
+.icon-button-sessions {
+  background: var(--accent);
+}
+
 .icon-button-logs {
   background: var(--secondary);
 }

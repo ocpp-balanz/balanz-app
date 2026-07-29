@@ -4,11 +4,13 @@ import {
   ApiError,
   AUDIT_LOGGER,
   canViewLogs,
+  canViewSessions,
   clearAuthToken,
   clearSelectedChargerId,
   fetchChargerDetails,
   fetchGroups,
   fetchLogs,
+  fetchSessions,
   formatLogTimestamp,
   getRefreshIntervalSeconds,
   getStoredSelectedChargerId,
@@ -28,6 +30,10 @@ import DialComponent from './components/DialComponent';
 import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
 import LogsScreen, { DEFAULT_LOG_RANGE, LOG_ALL, LOG_RANGES } from './components/LogsScreen';
+import SessionsScreen, {
+  DEFAULT_SESSION_GROUPING,
+  DEFAULT_SESSION_RANGE,
+} from './components/SessionsScreen';
 import MenuDrawer from './components/MenuDrawer';
 import UserMenu from './components/UserMenu';
 
@@ -102,6 +108,12 @@ export default function App() {
   const [logLogger, setLogLogger] = useState(AUDIT_LOGGER);
   const [logSearch, setLogSearch] = useState('');
 
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState('');
+  const [sessionRange, setSessionRange] = useState(DEFAULT_SESSION_RANGE);
+  const [sessionGrouping, setSessionGrouping] = useState(DEFAULT_SESSION_GROUPING);
+
   // Accordion state for the groups list. Held here, not in GroupsScreen,
   // because that component unmounts every time a charger is opened - keeping
   // it there meant the list came back collapsed, which also silently broke
@@ -166,6 +178,10 @@ export default function App() {
     setLogScope('charger');
     setLogLogger(AUDIT_LOGGER);
     setLogSearch('');
+    setSessions([]);
+    setSessionsError('');
+    setSessionRange(DEFAULT_SESSION_RANGE);
+    setSessionGrouping(DEFAULT_SESSION_GROUPING);
   }
 
   function handleAuthFailure(error) {
@@ -274,6 +290,35 @@ export default function App() {
     }
   }
 
+  /**
+   * Historic sessions for one charger. GetSessions has no date filter, so
+   * the whole (bounded) set for the charger is fetched and the period is
+   * applied in SessionsScreen.
+   */
+  async function loadSessions(chargerId, { quiet = false } = {}) {
+    if (!chargerId) {
+      return;
+    }
+    if (!quiet) {
+      setSessionsLoading(true);
+      setSessionsError('');
+    }
+
+    try {
+      const list = await fetchSessions({ chargerId });
+      setSessions(list);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      if (!quiet) {
+        setSessionsError(formatError(error));
+      }
+    } finally {
+      if (!quiet) {
+        setSessionsLoading(false);
+      }
+    }
+  }
+
   // Restore a stored session on load.
   useEffect(() => {
     if (authState !== 'checking') {
@@ -361,6 +406,24 @@ export default function App() {
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, view, logRange, logLogger, logSearch]);
+
+  // Sessions are historic, so this only needs the one fetch on open (plus a
+  // quiet refresh on the shared interval to pick up newly-closed sessions).
+  // The period/grouping are applied client-side, so changing them doesn't
+  // refetch.
+  useEffect(() => {
+    if (authState !== 'authenticated' || view !== 'sessions' || !selectedChargerId) {
+      return undefined;
+    }
+
+    void loadSessions(selectedChargerId);
+    const intervalId = window.setInterval(() => {
+      void loadSessions(selectedChargerId, { quiet: true });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, view, selectedChargerId]);
 
   // Load the selected charger's detail whenever the selection changes or a
   // mutation (apply limit/priority, stop) requests a refresh.
@@ -694,11 +757,24 @@ export default function App() {
     setView('logs');
   }
 
-  // One level back: a charger's log returns to that charger, the standalone
-  // log tool to the root, and the charger to the list it was picked from.
+  function handleOpenSessions() {
+    setSessions([]);
+    setSessionsError('');
+    setSessionRange(DEFAULT_SESSION_RANGE);
+    setSessionGrouping(DEFAULT_SESSION_GROUPING);
+    setView('sessions');
+  }
+
+  // One level back: a charger's log or session list returns to that charger,
+  // the standalone log tool to the root, and the charger to the list it was
+  // picked from.
   function handleBack() {
     if (view === 'logs') {
       setView(logScope === 'charger' ? 'dashboard' : 'groups');
+      return;
+    }
+    if (view === 'sessions') {
+      setView('dashboard');
       return;
     }
     setView('groups');
@@ -723,6 +799,11 @@ export default function App() {
   if (authState !== 'authenticated') {
     return <LoginScreen loading={authLoading} error={authError} onLogin={handleLogin} />;
   }
+
+  // Screens drilled into from a charger say so; the standalone log tool and
+  // the charger screen itself both step back to the list.
+  const returnsToCharger = view === 'sessions' || (view === 'logs' && logScope === 'charger');
+  const backLabel = returnsToCharger ? 'Back to charger' : 'Back to groups';
 
   return (
     <div className="app-shell">
@@ -758,8 +839,8 @@ export default function App() {
             <button
               className="menu-button"
               type="button"
-              aria-label={view === 'logs' && logScope === 'charger' ? 'Back to charger' : 'Back to groups'}
-              title={view === 'logs' && logScope === 'charger' ? 'Back to charger' : 'Back to groups'}
+              aria-label={backLabel}
+              title={backLabel}
               onClick={handleBack}
             >
               <BackIcon />
@@ -768,9 +849,11 @@ export default function App() {
           <h1>
             {view === 'logs'
               ? 'Logs'
-              : view === 'dashboard'
-                ? selectedCharger?.alias || 'Balanz'
-                : 'Balanz'}
+              : view === 'sessions'
+                ? 'Sessions'
+                : view === 'dashboard'
+                  ? selectedCharger?.alias || 'Balanz'
+                  : 'Balanz'}
           </h1>
         </div>
 
@@ -813,6 +896,17 @@ export default function App() {
             search={logSearch}
             onSearchChange={setLogSearch}
           />
+        ) : view === 'sessions' ? (
+          <SessionsScreen
+            charger={selectedCharger}
+            sessions={sessions}
+            loading={sessionsLoading}
+            error={sessionsError}
+            range={sessionRange}
+            onRangeChange={setSessionRange}
+            grouping={sessionGrouping}
+            onGroupingChange={setSessionGrouping}
+          />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
             <DialComponent
@@ -825,6 +919,7 @@ export default function App() {
               onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
               onOpenLogs={handleOpenChargerLogs}
+              onOpenSessions={canViewSessions(userType) ? handleOpenSessions : undefined}
               onResetCharger={handleResetCharger}
               isAllocationGroup={isAllocationGroup}
               userType={userType}
