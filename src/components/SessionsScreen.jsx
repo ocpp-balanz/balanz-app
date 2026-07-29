@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-import ChargingHistoryChart from './ChargingHistoryChart';
+import ChargingGraphModal from './ChargingGraphModal';
 import './SessionsScreen.css';
 
 // GetSessions returns everything for the charger in one go and has no date
@@ -276,30 +276,15 @@ export default function SessionsScreen({
         ))}
       </div>
 
-      {/* The same chart the live charger screen uses - it takes only a raw
-          history array, which is exactly why it was kept free of any
-          session-specific logic. */}
+      {/* Exactly the same graph modal the live charger screen opens - zoom,
+          pan and "Reset zoom" included - just pointed at a stored session's
+          history instead of the running one. */}
       {graphSession ? (
-        <>
-          <button
-            type="button"
-            className="menu-backdrop is-open"
-            aria-label="Close graph"
-            onClick={() => setGraphSession(null)}
-          />
-          <div className="modal-panel is-wide panel">
-            <div className="modal-panel-header">
-              <div>
-                <p className="section-kicker">{formatDateTime(graphSession.startTime)}</p>
-                <h3>Charging graph</h3>
-              </div>
-              <button className="ghost-button" type="button" onClick={() => setGraphSession(null)}>
-                Close
-              </button>
-            </div>
-            <ChargingHistoryChart history={graphSession.chargingHistory} height={260} />
-          </div>
-        </>
+        <ChargingGraphModal
+          kicker={formatDateTime(graphSession.startTime)}
+          history={graphSession.chargingHistory}
+          onClose={() => setGraphSession(null)}
+        />
       ) : null}
     </section>
   );

@@ -91,6 +91,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 - Display user-friendly charger aliases before technical charger IDs.
 - Session data should highlight start time, kWh charged, current power, current amperage, and recent history.
 - Background refreshes should update state without forcing manual page reloads.
+- When a view is offered in more than one place, share the whole surface
+  (chrome and controls included), not just its inner widget - sharing only
+  the chart left the historic-session graph without the zoom controls the
+  live one had.
 - Keep the codebase small and easy to reason about. Hand-rolled SVG is
   preferred over pulling in charting or icon libraries; where an icon has a
   balanz-ui counterpart, reuse that icon's path data so the two match.

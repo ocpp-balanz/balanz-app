@@ -8,7 +8,7 @@ import {
   RESET_TYPES,
 } from '../apiClient';
 import ChargingDial from './ChargingDial';
-import ChargingHistoryChart from './ChargingHistoryChart';
+import ChargingGraphModal from './ChargingGraphModal';
 import './DialStyles.css';
 
 // Balanz reports current draw in Amps only (no voltage/phase count in the
@@ -187,12 +187,6 @@ export default function DialComponent({
   // the very fetch it just started (tags would spin forever). Reset on error
   // so reopening the dialog retries.
   const tagsLoadedRef = useRef(false);
-  // Tracks the chart's own zoom state (see ChargingHistoryChart) purely so
-  // the "Reset zoom" button can live in this fixed-size modal header
-  // instead of inside the chart's own layout, which would otherwise resize
-  // the modal each time that button appeared/disappeared.
-  const [chartZoomed, setChartZoomed] = useState(false);
-  const chartRef = useRef(null);
 
   const session = charger.session || null;
   const connector = charger.activeConnector || null;
@@ -677,32 +671,7 @@ export default function DialComponent({
       ) : null}
 
       {graphOpen ? (
-        <>
-          <button type="button" className="menu-backdrop is-open" aria-label="Close graph" onClick={() => setGraphOpen(false)} />
-          <div className="modal-panel is-wide panel">
-            <div className="modal-panel-header">
-              <div>
-                <p className="section-kicker">Recent activity</p>
-                <h3>Charging graph</h3>
-              </div>
-              <div className="modal-header-actions">
-                {chartZoomed ? (
-                  <button
-                    className="ghost-button"
-                    type="button"
-                    onClick={() => chartRef.current?.resetZoom()}
-                  >
-                    Reset zoom
-                  </button>
-                ) : null}
-                <button className="ghost-button" type="button" onClick={() => setGraphOpen(false)}>
-                  Close
-                </button>
-              </div>
-            </div>
-            <ChargingHistoryChart ref={chartRef} history={history} height={260} onZoomChange={setChartZoomed} />
-          </div>
-        </>
+        <ChargingGraphModal kicker="Recent activity" history={history} onClose={() => setGraphOpen(false)} />
       ) : null}
     </div>
   );

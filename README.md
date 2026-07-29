@@ -232,9 +232,9 @@ newest-first, matching balanz-ui's own session table.
 
 Each session shows start, end, duration, energy, user and stop reason, and —
 where the stored `charging_history` has enough points — opens the *same*
-`ChargingHistoryChart` used for the live session. That reuse is why the
-component was written to take only a raw history array with no fetching of
-its own.
+`ChargingGraphModal` used for the live session, zoom/pan and "Reset zoom"
+included. That reuse is why the chart was written to take only a raw history
+array with no fetching of its own.
 
 Two API details worth knowing:
 
@@ -342,7 +342,10 @@ See `getApiBaseUrl` / `setApiBaseUrl` / `clearApiBaseUrl` /
 
 The step chart of offered vs. used current (`ChargingHistoryChart`) opens in
 a wide modal via the QueryStats icon button next to Play/Stop, rather than
-always rendering inline — at its default inline size it would be cramped and
+always rendering inline. That modal — backdrop, header and the "Reset zoom"
+control — is itself a shared component (`ChargingGraphModal`), so the live
+session and a historic one get identical behaviour; when only the chart was
+shared, the sessions list silently ended up without the zoom reset — at its default inline size it would be cramped and
 partially cut off the bottom of the screen on a phone. See
 `src/components/DialComponent.jsx` (the `graphOpen` state and the
 `.modal-panel.is-wide` modal) and `src/components/ChargingHistoryChart.jsx`
@@ -680,6 +683,7 @@ src/
     LogsScreen.jsx / .css         Log viewer: time range, log type and message search (Admin only)
     DialComponent.jsx             Selected charger detail, session data, controls
     ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control
+    ChargingGraphModal.jsx        Shared graph modal (chart + zoom controls), used live and for history
     ChargingHistoryChart.jsx/.css Reusable step chart of offered vs. usage current over time
     DialStyles.css                Styling for the charger detail view
 ```
