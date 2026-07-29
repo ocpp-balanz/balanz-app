@@ -80,6 +80,35 @@ export function canSetChargePriority(userType) {
   return [USER_TYPES.SESSION_PRIORITY, USER_TYPES.TAGS, USER_TYPES.ADMIN].includes(userType);
 }
 
+// GetLogs isn't in any role's API_ALLOW list either, so it's Admin-only.
+export function canViewLogs(userType) {
+  return userType === USER_TYPES.ADMIN;
+}
+
+// Balanz routes audit entries through a logger literally named "AUDIT"
+// (balanz/audit_logger.py); everything else in the buffer is ordinary
+// application logging.
+export const AUDIT_LOGGER = 'AUDIT';
+
+/**
+ * Formats a Date the way the backend writes its own log timestamps
+ * ("%Y-%m-%d %H:%M:%S", see the Formatter in balanz/balanz.py).
+ *
+ * This exact shape matters: GetLogs compares timeStampStart/timeStampEnd
+ * against the stored timestamp with plain string comparison, which only
+ * behaves chronologically because that format sorts lexicographically. Note
+ * the backend writes local time, so a device in a different timezone to the
+ * server would shift the window by the offset - fine for the on-prem case
+ * this app targets.
+ */
+export function formatLogTimestamp(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+  );
+}
+
 // Known error codes returned by the Balanz API, mapped to user-facing text.
 const ERROR_MESSAGES = {
   NotAuthorized: 'You are not authorized to perform this action.',
@@ -579,6 +608,36 @@ class BalanzWebsocketClient {
     });
   }
 
+  /**
+   * GetLogs returns the server's in-memory log buffer, optionally filtered.
+   * There is no charger field on a log record - entries are just
+   * {timestamp, level, logger, message} - so "logs for this charger" can only
+   * be expressed as a substring match on the message text. Audit lines embed
+   * both the charger id and its alias, and the id is the safer key of the two
+   * since the match is a plain case-sensitive substring (no regex), where one
+   * alias could be a prefix of another.
+   *
+   * The API applies no limit or pagination, so callers should always pass a
+   * time window as well rather than pulling the whole buffer to a phone.
+   */
+  async fetchLogs({ logger, messageSearch, timeStampStart, timeStampEnd, level } = {}) {
+    const filters = {};
+    if (logger) filters.logger = logger;
+    if (messageSearch) filters.messageSearch = messageSearch;
+    if (timeStampStart) filters.timeStampStart = timeStampStart;
+    if (timeStampEnd) filters.timeStampEnd = timeStampEnd;
+    if (level) filters.level = level;
+
+    const payload = await this.call('GetLogs', { filters });
+    const list = Array.isArray(payload?.logs) ? payload.logs : [];
+    return list.map((entry) => ({
+      timestamp: entry?.timestamp ?? '',
+      level: entry?.level ?? 'INFO',
+      logger: entry?.logger ?? '',
+      message: entry?.message ?? '',
+    }));
+  }
+
   async setChargePriority({ chargerId, connectorId, priority }) {
     return this.call('SetChargePriority', {
       charger_id: chargerId,
@@ -796,6 +855,10 @@ export async function remoteStartTransaction(payload) {
 
 export async function setChargePriority(payload) {
   return client.setChargePriority(payload);
+}
+
+export async function fetchLogs(filters) {
+  return client.fetchLogs(filters);
 }
 
 export function getConnectionStatus() {

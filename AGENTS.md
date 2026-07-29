@@ -19,6 +19,10 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
 - The header stays pinned to the top of the viewport on every screen; its
   controls must not require scrolling to reach. Keep it below the drawer and
   modal layers in the z-order so those still cover it.
+- Audit logs are viewed per charger (Admin only), one level below the charger
+  screen. Balanz log records carry no charger field, so this is necessarily a
+  message-substring filter on the charger id - keep that constraint in mind
+  before promising richer log filtering.
 - The group screen displays basic status information concerning all groups
   and their chargers, and is where the active charger is selected. It is the
   navigation root; the charger screen is the detail view drilled into from

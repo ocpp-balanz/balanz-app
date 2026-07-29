@@ -2,10 +2,13 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 
 import {
   ApiError,
+  AUDIT_LOGGER,
   clearAuthToken,
   clearSelectedChargerId,
   fetchChargerDetails,
   fetchGroups,
+  fetchLogs,
+  formatLogTimestamp,
   getRefreshIntervalSeconds,
   getStoredSelectedChargerId,
   hasStoredAuthToken,
@@ -22,6 +25,7 @@ import {
 import DialComponent from './components/DialComponent';
 import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
+import LogsScreen, { DEFAULT_LOG_RANGE, LOG_RANGES } from './components/LogsScreen';
 import MenuDrawer from './components/MenuDrawer';
 import UserMenu from './components/UserMenu';
 
@@ -62,7 +66,8 @@ export default function App() {
   const [userId, setUserId] = useState('');
 
   // 'groups' is the navigation root (the browsable list); 'dashboard' is the
-  // detail view drilled into from it. Start on the dashboard only when a
+  // detail view drilled into from it, and 'logs' is that charger's audit log,
+  // drilled into one level further. Start on the dashboard only when a
   // previously-selected charger is remembered - otherwise there's nothing to
   // show there, so the list is the sensible landing screen.
   const [view, setView] = useState(() => (getStoredSelectedChargerId() ? 'dashboard' : 'groups'));
@@ -82,6 +87,11 @@ export default function App() {
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
   const [groupsError, setGroupsError] = useState('');
+
+  const [logs, setLogs] = useState([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState('');
+  const [logRange, setLogRange] = useState(DEFAULT_LOG_RANGE);
 
   // Accordion state for the groups list. Held here, not in GroupsScreen,
   // because that component unmounts every time a charger is opened - keeping
@@ -141,6 +151,9 @@ export default function App() {
     setGroups([]);
     setExpandedGroups(new Set());
     didExpandInitialRef.current = false;
+    setLogs([]);
+    setLogsError('');
+    setLogRange(DEFAULT_LOG_RANGE);
   }
 
   function handleAuthFailure(error) {
@@ -204,6 +217,45 @@ export default function App() {
     } finally {
       if (!quiet) {
         setGroupsLoading(false);
+      }
+    }
+  }
+
+  /**
+   * Audit entries for one charger.
+   *
+   * A log record carries no charger field, so "this charger's log" is a
+   * substring match on the message text (see fetchLogs in apiClient) using
+   * the charger *id* - it appears in every audit line, and unlike the alias
+   * it can't accidentally be a substring of another charger's name.
+   */
+  async function loadLogs(chargerId, rangeId, { quiet = false } = {}) {
+    if (!chargerId) {
+      return;
+    }
+    if (!quiet) {
+      setLogsLoading(true);
+      setLogsError('');
+    }
+
+    const range = LOG_RANGES.find((option) => option.id === rangeId) ?? LOG_RANGES[0];
+    const since = new Date(Date.now() - range.hours * 60 * 60 * 1000);
+
+    try {
+      const entries = await fetchLogs({
+        logger: AUDIT_LOGGER,
+        messageSearch: chargerId,
+        timeStampStart: formatLogTimestamp(since),
+      });
+      setLogs(entries);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      if (!quiet) {
+        setLogsError(formatError(error));
+      }
+    } finally {
+      if (!quiet) {
+        setLogsLoading(false);
       }
     }
   }
@@ -278,6 +330,23 @@ export default function App() {
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, view]);
+
+  // Load the audit log when that screen is opened or its range changes, and
+  // keep it refreshing quietly while it's on screen - same rule as the groups
+  // list: poll only what's actually being looked at.
+  useEffect(() => {
+    if (authState !== 'authenticated' || view !== 'logs' || !selectedChargerId) {
+      return undefined;
+    }
+
+    void loadLogs(selectedChargerId, logRange);
+    const intervalId = window.setInterval(() => {
+      void loadLogs(selectedChargerId, logRange, { quiet: true });
+    }, REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authState, view, selectedChargerId, logRange]);
 
   // Load the selected charger's detail whenever the selection changes or a
   // mutation (apply limit/priority, stop) requests a refresh.
@@ -366,10 +435,12 @@ export default function App() {
   // why the first attempt at this appeared to do nothing.
   const groupsScrollRef = useRef(0);
   useLayoutEffect(() => {
-    if (view === 'dashboard') {
-      window.scrollTo(0, 0);
-    } else {
+    if (view === 'groups') {
       window.scrollTo(0, groupsScrollRef.current || 0);
+    } else {
+      // Any screen drilled into from the list (charger, its audit log) opens
+      // at the top.
+      window.scrollTo(0, 0);
     }
     // selectedChargerId is a dependency too: picking a different charger
     // while already on the dashboard should also start at the top.
@@ -559,6 +630,18 @@ export default function App() {
     resetSession('');
   }
 
+  function handleOpenLogs() {
+    setLogs([]);
+    setLogsError('');
+    setView('logs');
+  }
+
+  // One level back: the audit log returns to its charger, the charger to the
+  // list it was picked from.
+  function handleBack() {
+    setView(view === 'logs' ? 'dashboard' : 'groups');
+  }
+
   if (authState === 'checking') {
     return (
       <div className="auth-shell">
@@ -589,23 +672,14 @@ export default function App() {
       />
 
       {/* Standard hierarchical-navigation header: a single leading slot,
-          holding the hamburger at the root (groups list) and a back arrow
-          on the drilled-into charger view. The drawer is reached from the
-          root only - one step back from anywhere - so "back" and "menu"
-          never compete for the same spot. */}
+          holding the hamburger at the root (groups list) and a back arrow on
+          any screen drilled into from it (charger, and its audit log one
+          level deeper). The drawer is reached from the root only - one step
+          back from anywhere - so "back" and "menu" never compete for the
+          same spot. */}
       <header className="app-header main-header">
         <div className="header-left">
-          {view === 'dashboard' ? (
-            <button
-              className="menu-button"
-              type="button"
-              aria-label="Back to groups"
-              title="Back to groups"
-              onClick={() => setView('groups')}
-            >
-              <BackIcon />
-            </button>
-          ) : (
+          {view === 'groups' ? (
             <button
               className="menu-button"
               type="button"
@@ -616,8 +690,24 @@ export default function App() {
               <span />
               <span />
             </button>
+          ) : (
+            <button
+              className="menu-button"
+              type="button"
+              aria-label={view === 'logs' ? 'Back to charger' : 'Back to groups'}
+              title={view === 'logs' ? 'Back to charger' : 'Back to groups'}
+              onClick={handleBack}
+            >
+              <BackIcon />
+            </button>
           )}
-          <h1>{view === 'dashboard' ? selectedCharger?.alias || 'Balanz' : 'Balanz'}</h1>
+          <h1>
+            {view === 'logs'
+              ? 'Audit log'
+              : view === 'dashboard'
+                ? selectedCharger?.alias || 'Balanz'
+                : 'Balanz'}
+          </h1>
         </div>
 
         {/* Who's signed in, and the account menu. Shown on *every* screen:
@@ -646,6 +736,15 @@ export default function App() {
             onToggleGroup={handleToggleGroup}
             onToggleAll={handleToggleAll}
           />
+        ) : view === 'logs' ? (
+          <LogsScreen
+            charger={selectedCharger}
+            entries={logs}
+            loading={logsLoading}
+            error={logsError}
+            range={logRange}
+            onRangeChange={setLogRange}
+          />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
             <DialComponent
@@ -657,6 +756,7 @@ export default function App() {
               onApplyMaxCurrent={handleApplyCurrentLimit}
               onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
+              onOpenLogs={handleOpenLogs}
               isAllocationGroup={isAllocationGroup}
               userType={userType}
               draftPriority={draftPriority}

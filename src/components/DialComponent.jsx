@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { canControlCharging, canSetChargePriority, fetchTags } from '../apiClient';
+import { canControlCharging, canSetChargePriority, canViewLogs, fetchTags } from '../apiClient';
 import ChargingDial from './ChargingDial';
 import ChargingHistoryChart from './ChargingHistoryChart';
 import './DialStyles.css';
@@ -99,6 +99,19 @@ function QueryStatsIcon() {
   );
 }
 
+// Material's "receipt_long" - a document with ruled lines, the closest thing
+// in that set to an audit trail.
+function AuditLogIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M19 5v14a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-2h3V2l1.5 1.5L8 2l1.5 1.5L11 2l1.5 1.5L14 2l1.5 1.5L17 2l2 2zM7 9h8V7H7zm0 4h8v-2H7zm0 4h6v-2H7zm10 3a1 1 0 0 0 1-1V7h2v12a1 1 0 0 1-1 1z"
+      />
+    </svg>
+  );
+}
+
 function CheckIcon() {
   return (
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -116,6 +129,7 @@ export default function DialComponent({
   onApplyMaxCurrent,
   onStartTransaction,
   onStopTransaction,
+  onOpenLogs,
   isAllocationGroup,
   userType,
   draftPriority,
@@ -182,6 +196,9 @@ export default function DialComponent({
   const canRemoteStart = Boolean(connector && ['Preparing', 'Finishing'].includes(connector.status));
   const isAdmin = canControlCharging(userType);
   const canPrioritize = canSetChargePriority(userType);
+  // GetLogs is Admin-only server-side, so don't offer the entry point to
+  // anyone who'd just get NotAuthorized back.
+  const canSeeLogs = canViewLogs(userType) && Boolean(onOpenLogs);
   // Direct current-limit control only makes sense outside SmartCharging
   // groups (Balanz's own allocation loop owns the offer there).
   const isDirectControl = canStop && !isAllocationGroup && isAdmin;
@@ -333,7 +350,7 @@ export default function DialComponent({
             </div>
           ) : null}
 
-          {isAdmin || hasGraphAccess ? (
+          {isAdmin || hasGraphAccess || canSeeLogs ? (
             <div className="dial-transport-row">
               {isAdmin ? (
                 canStop ? (
@@ -370,6 +387,18 @@ export default function DialComponent({
                   title="View charging graph"
                 >
                   <QueryStatsIcon />
+                </button>
+              ) : null}
+
+              {canSeeLogs ? (
+                <button
+                  type="button"
+                  className="icon-button icon-button-logs"
+                  onClick={onOpenLogs}
+                  aria-label="View audit log"
+                  title="View audit log"
+                >
+                  <AuditLogIcon />
                 </button>
               ) : null}
             </div>

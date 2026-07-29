@@ -71,6 +71,8 @@ a menu of peer destinations:
 - **The charger dashboard is the detail view**, drilled into by tapping a
   charger. Its header swaps the hamburger for a **back arrow** returning to
   the groups list, and shows the charger's alias as the title.
+- **The audit log is one level deeper**, opened from the icon row under the
+  dial; its back arrow returns to the charger. See "Audit log" below.
 
 The root screen's header also shows **who is signed in**, top right: a pill
 with the user name and a caret. Clicking it opens the account menu, which
@@ -168,6 +170,7 @@ offers an action the backend would reject:
 | Action | Required role(s) |
 | --- | --- |
 | Start a session, stop a session, set a current limit | `Admin` only |
+| View the audit log (`GetLogs`) | `Admin` only |
 | Set session priority | `SessionPriority`, `Tags`, or `Admin` |
 
 Users without the right role see a plain explanation instead of a control
@@ -200,6 +203,44 @@ All of these live in the charger dashboard, directly on or under the dial:
 - **Charging graph — a QueryStats icon button** next to Play/Stop, matching
   balanz-ui's own icon for the same thing. Unlike Play/Stop it isn't
   Admin-gated: anyone who can see a session with history can view its graph.
+
+## Audit log
+
+Admin users get an audit-log icon in the icon row under the dial, opening a
+full screen (not a modal — it's a long scrolling list, so it wants the whole
+viewport and the existing back arrow) showing Balanz's audit entries for that
+charger. Time-range chips offer the last 24 hours (default), week or month;
+the list reads oldest-first (chronologically, like the underlying log file),
+grouped by day, with a **Jump to latest** button for the common case of
+wanting the most recent activity without scrolling. It refreshes on the same
+interval as everything else while it's on screen.
+
+Three things about `GetLogs` shape this design:
+
+- **It is Admin-only.** Like the control commands it appears in no role's
+  `API_ALLOW` list, so the icon is hidden for everyone else rather than
+  offering an action the backend would reject.
+- **A log record has no charger field.** Entries are just
+  `{timestamp, level, logger, message}`, with audit lines carrying
+  `logger: "AUDIT"`. "This charger's log" is therefore a `messageSearch`
+  substring match against the message text, which works because audit lines
+  embed the id and alias (`...on TACW2240822T1480/1 (Private-JVM2)...`). The
+  charger **id** is used rather than the alias: the match is a plain
+  case-sensitive substring with no regex, and one alias could be a substring
+  of another.
+- **There is no limit or pagination**, so a request always carries a
+  `timeStampStart`. That value must be formatted exactly as the server writes
+  its own timestamps (`%Y-%m-%d %H:%M:%S`, see `formatLogTimestamp` in
+  `src/apiClient.js`) — the filter is a plain string comparison, which only
+  behaves chronologically because that format sorts lexicographically. Those
+  timestamps are server-local, so a device in a different timezone shifts the
+  window by the offset; fine for the on-prem case this app targets.
+
+Audit messages start with a bracketed category (`[SESSION-START]`,
+`[AUTH-OK]`, `[CHARGER-UPDATE]`…). That prefix is split out into its own chip
+so the list stays scannable, and only non-INFO entries get a level chip,
+since INFO is nearly all of them. Long lines wrap rather than scrolling
+horizontally — the monospace console balanz-ui uses does not survive a phone.
 
 ## Free Vending sessions
 
@@ -575,6 +616,7 @@ src/
     UserMenu.jsx                  Header identity chip + account menu (sign out)
     MenuDrawer.jsx                Drawer: Groups & status nav item + settings/about footer
     GroupsScreen.jsx              Group status + charger picker (the navigation root)
+    LogsScreen.jsx / .css         Per-charger audit log with time-range chips (Admin only)
     DialComponent.jsx             Selected charger detail, session data, controls
     ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control
     ChargingHistoryChart.jsx/.css Reusable step chart of offered vs. usage current over time

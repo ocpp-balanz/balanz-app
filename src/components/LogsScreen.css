@@ -1,0 +1,152 @@
+.logs-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+/* Time-range chips on the left, "Jump to latest" on the right; they stack
+   on a narrow screen rather than squeezing the chips. */
+.log-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 0.75rem;
+}
+
+/* Time-range filter chips. */
+.log-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.log-jump-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border-color);
+  background: var(--panel);
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease;
+}
+
+.log-jump-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.log-range-chip {
+  border: 1px solid var(--border-color);
+  background: var(--panel-alt);
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.log-range-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.log-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+/* Date separator - the timestamp on each row then only needs the time. */
+.log-day {
+  position: sticky;
+  top: 0;
+  margin-top: 0.35rem;
+  padding: 0.3rem 0;
+  background: var(--panel);
+  color: var(--muted-text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.log-day:first-child {
+  margin-top: 0;
+}
+
+.log-entry {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-color);
+}
+
+.log-entry-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--muted-text);
+  font-size: 0.78rem;
+}
+
+.log-entry-meta time {
+  font-variant-numeric: tabular-nums;
+}
+
+.log-category {
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  background: var(--info-bg);
+  color: var(--info);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.log-level {
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.log-level.tone-preparing {
+  background: var(--warning-bg);
+  color: var(--warning);
+}
+
+.log-level.tone-error {
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+/* Long audit lines wrap rather than forcing a horizontal scrollbar - the
+   full-width monospace console balanz-ui uses does not survive a phone. */
+.log-message {
+  margin: 0;
+  color: var(--text-color);
+  font-size: 0.88rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .log-entry {
+    padding: 0.5rem 0.6rem;
+  }
+
+  .log-message {
+    font-size: 0.84rem;
+  }
+}

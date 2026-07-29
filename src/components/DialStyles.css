@@ -91,6 +91,12 @@
   background: var(--info);
 }
 
+/* Audit log - another read-only view action, so it shares the graph icon's
+   neutral treatment rather than a control colour. */
+.icon-button-logs {
+  background: var(--secondary);
+}
+
 .hero-copy {
   min-width: 0;
   display: grid;
