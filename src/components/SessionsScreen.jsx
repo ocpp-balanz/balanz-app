@@ -113,7 +113,15 @@ function sessionUser(session) {
   return session.idTag || '--';
 }
 
+/**
+ * Historic sessions, for one charger or across the whole site.
+ *
+ * `scope` only decides which filters are offered - everything below works the
+ * same either way, so the standalone tool and the per-charger view are the
+ * same component rather than two that drift apart.
+ */
 export default function SessionsScreen({
+  scope = 'charger',
   charger,
   sessions,
   loading,
@@ -122,8 +130,35 @@ export default function SessionsScreen({
   onRangeChange,
   grouping,
   onGroupingChange,
+  showDetails,
+  onShowDetailsChange,
+  groups = [],
+  groupFilter = '',
+  onGroupFilterChange,
+  chargerFilter = '',
+  onChargerFilterChange,
+  userFilter = '',
+  onUserFilterChange,
 }) {
   const [graphSession, setGraphSession] = useState(null);
+  const isGlobal = scope === 'global';
+
+  // Charger picker options, narrowed to the chosen group. Sourced from the
+  // groups already loaded for the groups screen, so no extra call is needed.
+  const chargerOptions = [];
+  const seenChargers = new Set();
+  for (const group of groups) {
+    if (groupFilter && group.groupId !== groupFilter) {
+      continue;
+    }
+    for (const item of group.chargers) {
+      if (item.chargerId && !seenChargers.has(item.chargerId)) {
+        seenChargers.add(item.chargerId);
+        chargerOptions.push({ id: item.chargerId, label: item.alias || item.chargerId });
+      }
+    }
+  }
+  chargerOptions.sort((a, b) => a.label.localeCompare(b.label));
 
   // GetSessions has no time filter, so the period is applied here. A null
   // `months` ("All") skips the cutoff entirely.
@@ -135,12 +170,32 @@ export default function SessionsScreen({
     cutoffSeconds = cutoff.getTime() / 1000;
   }
 
+  const userNeedle = userFilter.trim().toLowerCase();
+
   const visible = sessions
-    .filter(
-      (session) =>
-        Number.isFinite(session.startTime) &&
-        (cutoffSeconds === null || session.startTime >= cutoffSeconds),
-    )
+    .filter((session) => {
+      if (!Number.isFinite(session.startTime)) {
+        return false;
+      }
+      if (cutoffSeconds !== null && session.startTime < cutoffSeconds) {
+        return false;
+      }
+      // Group is normally already applied server-side (GetSessions takes a
+      // group_id); repeated here so the view is right even mid-refetch.
+      if (groupFilter && session.groupId !== groupFilter) {
+        return false;
+      }
+      if (chargerFilter && session.chargerId !== chargerFilter) {
+        return false;
+      }
+      if (userNeedle) {
+        const haystack = `${session.userName ?? ''} ${session.idTag ?? ''}`.toLowerCase();
+        if (!haystack.includes(userNeedle)) {
+          return false;
+        }
+      }
+      return true;
+    })
     .sort((a, b) => b.startTime - a.startTime);
 
   // Group into buckets, newest first, each carrying its own subtotals.
@@ -176,6 +231,48 @@ export default function SessionsScreen({
       </div>
 
       <div className="session-filters">
+        {isGlobal ? (
+          <div className="session-selects">
+            <label className="session-field">
+              <span>Group</span>
+              <select value={groupFilter} onChange={(event) => onGroupFilterChange(event.target.value)}>
+                <option value="">All groups</option>
+                {/* The group id, not its free-text description - the id is
+                    what identifies a group everywhere else in the app. */}
+                {groups.map((group) => (
+                  <option key={group.groupId} value={group.groupId}>
+                    {group.groupId}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="session-field">
+              <span>Charger</span>
+              <select value={chargerFilter} onChange={(event) => onChargerFilterChange(event.target.value)}>
+                <option value="">All chargers</option>
+                {chargerOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="session-field">
+              <span>User</span>
+              <input
+                type="search"
+                value={userFilter}
+                onChange={(event) => onUserFilterChange(event.target.value)}
+                placeholder="User or tag"
+                autoComplete="off"
+                spellCheck="false"
+              />
+            </label>
+          </div>
+        ) : null}
+
         <div className="session-chips" role="group" aria-label="Period">
           {SESSION_RANGES.map((option) => (
             <button
@@ -206,6 +303,31 @@ export default function SessionsScreen({
             ))}
           </div>
         </div>
+
+        {/* Summaries-only collapses every session row, leaving just the
+            per-week/month subtotals - the useful view once this is pointed at
+            a whole site rather than one charger. */}
+        <div className="session-groupby">
+          <span className="session-groupby-label">Show</span>
+          <div className="session-chips" role="group" aria-label="Detail level">
+            <button
+              type="button"
+              className={`session-chip ${showDetails ? 'is-active' : ''}`}
+              aria-pressed={showDetails}
+              onClick={() => onShowDetailsChange(true)}
+            >
+              Sessions
+            </button>
+            <button
+              type="button"
+              className={`session-chip ${showDetails ? '' : 'is-active'}`}
+              aria-pressed={!showDetails}
+              onClick={() => onShowDetailsChange(false)}
+            >
+              Summaries only
+            </button>
+          </div>
+        </div>
       </div>
 
       {error ? <div className="alert alert-error">{error}</div> : null}
@@ -213,7 +335,11 @@ export default function SessionsScreen({
       {loading && visible.length === 0 ? <div className="inline-state">Loading sessions...</div> : null}
 
       {!loading && visible.length === 0 && !error ? (
-        <div className="inline-state">No sessions for this charger in the selected period.</div>
+        <div className="inline-state">
+          {isGlobal
+            ? 'No sessions match these filters.'
+            : 'No sessions for this charger in the selected period.'}
+        </div>
       ) : null}
 
       {visible.length > 0 ? (
@@ -233,7 +359,7 @@ export default function SessionsScreen({
               </span>
             </header>
 
-            {bucket.sessions.map((session) => (
+            {showDetails ? bucket.sessions.map((session) => (
               <article key={session.sessionId || `${session.startTime}`} className="session-card">
                 <div className="session-card-head">
                   <strong>{formatDateTime(session.startTime)}</strong>
@@ -241,6 +367,14 @@ export default function SessionsScreen({
                 </div>
 
                 <div className="session-meta">
+                  {/* Which charger only needs saying when the list spans
+                      more than one. */}
+                  {isGlobal ? (
+                    <span>
+                      <span className="session-meta-label">Charger</span>
+                      {session.chargerAlias || session.chargerId}
+                    </span>
+                  ) : null}
                   <span>
                     <span className="session-meta-label">Ended</span>
                     {formatTimeOnly(session.endTime)}
@@ -271,7 +405,7 @@ export default function SessionsScreen({
                   </button>
                 ) : null}
               </article>
-            ))}
+            )) : null}
           </section>
         ))}
       </div>

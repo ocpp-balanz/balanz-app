@@ -71,8 +71,9 @@ a menu of peer destinations:
 - **The charger dashboard is the detail view**, drilled into by tapping a
   charger. Its header swaps the hamburger for a **back arrow** returning to
   the groups list, and shows the charger's alias as the title.
-- **Sessions** (past sessions for that charger) open from the icon row under
-  the dial; back returns to the charger. See "Sessions" below.
+- **Sessions** open either from the icon row under the dial (that charger,
+  back returns there) or from the drawer as a standalone tool across all
+  chargers (back returns to the root). See "Sessions" below.
 - **Logs** open either from the icon row under the dial (seeded to that
   charger, back returns there) or from the drawer as a standalone tool (back
   returns to the root). See "Logs" below.
@@ -220,12 +221,28 @@ All of these live in the charger dashboard, directly on or under the dial:
 
 ## Sessions
 
-The history icon under the dial opens that charger's past sessions — a full
-screen in the same style as Logs, with the back arrow returning to the
-charger. Period chips are **Last month** (default), **Last year** and
-**All** — kept short because they're purely a client-side view over data
-already fetched, so "All" costs nothing extra. Sessions are grouped into
-**subtotals per week or month** (selectable), each
+One screen, reachable two ways — like Logs:
+
+- **From a charger**, via the history icon under the dial; opens that
+  charger's sessions, and back returns to the charger.
+- **From the drawer** ("Sessions"), across every charger, with **Group**,
+  **Charger** and **User** filters; back returns to the groups list. It opens
+  in summaries-only mode, since per-session rows are rarely what you want
+  before narrowing down.
+
+Group is applied server-side (`GetSessions` takes a `group_id`, which keeps
+the payload down and is the only filter the API offers); charger and user are
+applied client-side over what comes back. The user filter matches either the
+user name or the id tag, case-insensitively. Changing the group clears any
+charger selection, which would otherwise belong to the previous group and
+silently filter everything out.
+
+A **Sessions / Summaries only** toggle collapses the per-session rows, leaving
+just the subtotals — most useful at site level. Period chips are **Last
+month** (default), **Last year** and **All** — kept short because they're
+purely a client-side view over data already fetched, so "All" costs nothing
+extra. Sessions are grouped into **subtotals per week or month**
+(selectable), each
 group heading carrying its session count, total energy and total charging
 time, with a running total for the whole period above the list. Sessions read
 newest-first, matching balanz-ui's own session table.
@@ -677,9 +694,9 @@ src/
     SettingsPanel.jsx             Runtime server-address & refresh-interval editor (modal, reachable pre/post login)
     AboutPanel.jsx                Version / build date modal, opened from the menu
     UserMenu.jsx                  Header identity chip + account menu (sign out)
-    MenuDrawer.jsx                Drawer: Groups & status + Logs nav items, settings/about footer
+    MenuDrawer.jsx                Drawer: Groups & status, Sessions, Logs nav items + settings/about footer
     GroupsScreen.jsx              Group status + charger picker (the navigation root)
-    SessionsScreen.jsx / .css     Past sessions with week/month subtotals, reusing ChargingHistoryChart
+    SessionsScreen.jsx / .css     Past sessions (per charger or site-wide) with week/month subtotals
     LogsScreen.jsx / .css         Log viewer: time range, log type and message search (Admin only)
     DialComponent.jsx             Selected charger detail, session data, controls
     ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control

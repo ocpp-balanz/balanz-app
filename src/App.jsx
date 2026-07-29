@@ -113,6 +113,15 @@ export default function App() {
   const [sessionsError, setSessionsError] = useState('');
   const [sessionRange, setSessionRange] = useState(DEFAULT_SESSION_RANGE);
   const [sessionGrouping, setSessionGrouping] = useState(DEFAULT_SESSION_GROUPING);
+  // Same split as the log screen: 'charger' when drilled into from a charger,
+  // 'global' when opened from the drawer as a standalone tool.
+  const [sessionScope, setSessionScope] = useState('charger');
+  const [showSessionDetails, setShowSessionDetails] = useState(true);
+  // Group is applied server-side (GetSessions takes a group_id, which keeps
+  // the payload down); charger and user are filtered in the screen itself.
+  const [sessionGroupFilter, setSessionGroupFilter] = useState('');
+  const [sessionChargerFilter, setSessionChargerFilter] = useState('');
+  const [sessionUserFilter, setSessionUserFilter] = useState('');
 
   // Accordion state for the groups list. Held here, not in GroupsScreen,
   // because that component unmounts every time a charger is opened - keeping
@@ -182,6 +191,11 @@ export default function App() {
     setSessionsError('');
     setSessionRange(DEFAULT_SESSION_RANGE);
     setSessionGrouping(DEFAULT_SESSION_GROUPING);
+    setSessionScope('charger');
+    setShowSessionDetails(true);
+    setSessionGroupFilter('');
+    setSessionChargerFilter('');
+    setSessionUserFilter('');
   }
 
   function handleAuthFailure(error) {
@@ -295,17 +309,17 @@ export default function App() {
    * the whole (bounded) set for the charger is fetched and the period is
    * applied in SessionsScreen.
    */
-  async function loadSessions(chargerId, { quiet = false } = {}) {
-    if (!chargerId) {
-      return;
-    }
+  async function loadSessions({ chargerId, groupId, quiet = false } = {}) {
     if (!quiet) {
       setSessionsLoading(true);
       setSessionsError('');
     }
 
     try {
-      const list = await fetchSessions({ chargerId });
+      // Narrowing by charger or group is done server-side where the API
+      // supports it; charger-alias and user filtering happen in the screen,
+      // over what comes back.
+      const list = await fetchSessions({ chargerId, groupId });
       setSessions(list);
     } catch (error) {
       if (handleAuthFailure(error)) return;
@@ -412,18 +426,26 @@ export default function App() {
   // The period/grouping are applied client-side, so changing them doesn't
   // refetch.
   useEffect(() => {
-    if (authState !== 'authenticated' || view !== 'sessions' || !selectedChargerId) {
+    if (authState !== 'authenticated' || view !== 'sessions') {
+      return undefined;
+    }
+    if (sessionScope === 'charger' && !selectedChargerId) {
       return undefined;
     }
 
-    void loadSessions(selectedChargerId);
+    const args =
+      sessionScope === 'charger'
+        ? { chargerId: selectedChargerId }
+        : { groupId: sessionGroupFilter || undefined };
+
+    void loadSessions(args);
     const intervalId = window.setInterval(() => {
-      void loadSessions(selectedChargerId, { quiet: true });
+      void loadSessions({ ...args, quiet: true });
     }, REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, view, selectedChargerId]);
+  }, [authState, view, selectedChargerId, sessionScope, sessionGroupFilter]);
 
   // Load the selected charger's detail whenever the selection changes or a
   // mutation (apply limit/priority, stop) requests a refresh.
@@ -757,11 +779,34 @@ export default function App() {
     setView('logs');
   }
 
+  function handleOpenChargerSessions() {
+    setSessions([]);
+    setSessionsError('');
+    setSessionRange(DEFAULT_SESSION_RANGE);
+    setSessionGrouping(DEFAULT_SESSION_GROUPING);
+    setSessionScope('charger');
+    setShowSessionDetails(true);
+    setSessionGroupFilter('');
+    setSessionChargerFilter('');
+    setSessionUserFilter('');
+    setView('sessions');
+  }
+
+  // From the drawer: the same screen across every charger, with the group /
+  // charger / user filters exposed.
   function handleOpenSessions() {
     setSessions([]);
     setSessionsError('');
     setSessionRange(DEFAULT_SESSION_RANGE);
     setSessionGrouping(DEFAULT_SESSION_GROUPING);
+    setSessionScope('global');
+    // Summaries first at site level: the per-session rows are rarely what
+    // you want before narrowing down.
+    setShowSessionDetails(false);
+    setSessionGroupFilter('');
+    setSessionChargerFilter('');
+    setSessionUserFilter('');
+    setMenuOpen(false);
     setView('sessions');
   }
 
@@ -774,7 +819,7 @@ export default function App() {
       return;
     }
     if (view === 'sessions') {
-      setView('dashboard');
+      setView(sessionScope === 'charger' ? 'dashboard' : 'groups');
       return;
     }
     setView('groups');
@@ -802,7 +847,9 @@ export default function App() {
 
   // Screens drilled into from a charger say so; the standalone log tool and
   // the charger screen itself both step back to the list.
-  const returnsToCharger = view === 'sessions' || (view === 'logs' && logScope === 'charger');
+  const returnsToCharger =
+    (view === 'sessions' && sessionScope === 'charger') ||
+    (view === 'logs' && logScope === 'charger');
   const backLabel = returnsToCharger ? 'Back to charger' : 'Back to groups';
 
   return (
@@ -811,9 +858,11 @@ export default function App() {
         open={menuOpen}
         currentView={view}
         canViewLogs={canViewLogs(userType)}
+        canViewSessions={canViewSessions(userType)}
         onClose={() => setMenuOpen(false)}
         onOpenGroups={handleOpenGroups}
         onOpenLogs={handleOpenLogs}
+        onOpenSessions={handleOpenSessions}
       />
 
       {/* Standard hierarchical-navigation header: a single leading slot,
@@ -898,7 +947,8 @@ export default function App() {
           />
         ) : view === 'sessions' ? (
           <SessionsScreen
-            charger={selectedCharger}
+            scope={sessionScope}
+            charger={sessionScope === 'charger' ? selectedCharger : null}
             sessions={sessions}
             loading={sessionsLoading}
             error={sessionsError}
@@ -906,6 +956,20 @@ export default function App() {
             onRangeChange={setSessionRange}
             grouping={sessionGrouping}
             onGroupingChange={setSessionGrouping}
+            showDetails={showSessionDetails}
+            onShowDetailsChange={setShowSessionDetails}
+            groups={groups}
+            groupFilter={sessionGroupFilter}
+            onGroupFilterChange={(value) => {
+              setSessionGroupFilter(value);
+              // A charger chosen under the old group would filter everything
+              // out; clear it rather than silently showing nothing.
+              setSessionChargerFilter('');
+            }}
+            chargerFilter={sessionChargerFilter}
+            onChargerFilterChange={setSessionChargerFilter}
+            userFilter={sessionUserFilter}
+            onUserFilterChange={setSessionUserFilter}
           />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
@@ -919,7 +983,7 @@ export default function App() {
               onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
               onOpenLogs={handleOpenChargerLogs}
-              onOpenSessions={canViewSessions(userType) ? handleOpenSessions : undefined}
+              onOpenSessions={canViewSessions(userType) ? handleOpenChargerSessions : undefined}
               onResetCharger={handleResetCharger}
               isAllocationGroup={isAllocationGroup}
               userType={userType}

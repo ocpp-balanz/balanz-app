@@ -12,6 +12,42 @@
   border: 1px solid var(--border-color);
 }
 
+/* Group / charger / user pickers, shown only in the standalone (global)
+   view. Two-up on wider screens, stacked on a phone. */
+.session-selects {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+
+.session-field {
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.session-field > span {
+  color: var(--muted-text);
+  font-size: 0.78rem;
+}
+
+.session-field select,
+.session-field input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--panel);
+  color: var(--text-color);
+  padding: 0.55rem 0.6rem;
+  outline: none;
+}
+
+.session-field select:focus,
+.session-field input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
 .session-chips {
   display: flex;
   flex-wrap: wrap;

@@ -29,7 +29,29 @@ function LogsNavIcon() {
   );
 }
 
-export default function MenuDrawer({ open, currentView, canViewLogs, onClose, onOpenGroups, onOpenLogs }) {
+// Material's "history", matching the past-sessions icon on the charger
+// screen.
+function SessionsNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M13 3c-4.97 0-9 4.03-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42C8.27 19.99 10.51 21 13 21c4.97 0 9-4.03 9-9s-4.03-9-9-9m-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8z"
+      />
+    </svg>
+  );
+}
+
+export default function MenuDrawer({
+  open,
+  currentView,
+  canViewLogs,
+  canViewSessions,
+  onClose,
+  onOpenGroups,
+  onOpenLogs,
+  onOpenSessions,
+}) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -82,6 +104,24 @@ export default function MenuDrawer({ open, currentView, canViewLogs, onClose, on
               <small>Browse chargers by group</small>
             </span>
           </button>
+
+          {/* GetSessions reaches Analysis and Tags as well as Admin. */}
+          {canViewSessions ? (
+            <button
+              type="button"
+              className={`menu-nav-item ${currentView === 'sessions' ? 'is-active' : ''}`}
+              aria-current={currentView === 'sessions' ? 'page' : undefined}
+              onClick={onOpenSessions}
+            >
+              <span className="menu-nav-icon">
+                <SessionsNavIcon />
+              </span>
+              <span className="menu-nav-copy">
+                <strong>Sessions</strong>
+                <small>Charging history and totals</small>
+              </span>
+            </button>
+          ) : null}
 
           {/* GetLogs is Admin-only server-side, so this entry is hidden for
               other roles rather than leading to a NotAuthorized error. */}
