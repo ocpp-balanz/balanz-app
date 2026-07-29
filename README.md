@@ -71,8 +71,9 @@ a menu of peer destinations:
 - **The charger dashboard is the detail view**, drilled into by tapping a
   charger. Its header swaps the hamburger for a **back arrow** returning to
   the groups list, and shows the charger's alias as the title.
-- **The audit log is one level deeper**, opened from the icon row under the
-  dial; its back arrow returns to the charger. See "Audit log" below.
+- **Logs** open either from the icon row under the dial (seeded to that
+  charger, back returns there) or from the drawer as a standalone tool (back
+  returns to the root). See "Logs" below.
 
 The root screen's header also shows **who is signed in**, top right: a pill
 with the user name and a caret. Clicking it opens the account menu, which
@@ -204,22 +205,36 @@ All of these live in the charger dashboard, directly on or under the dial:
   balanz-ui's own icon for the same thing. Unlike Play/Stop it isn't
   Admin-gated: anyone who can see a session with history can view its graph.
 
-## Audit log
+## Logs
 
-Admin users get an audit-log icon in the icon row under the dial, opening a
-full screen (not a modal — it's a long scrolling list, so it wants the whole
-viewport and the existing back arrow) showing Balanz's audit entries for that
-charger. Time-range chips offer the last 24 hours (default), week or month;
-the list reads oldest-first (chronologically, like the underlying log file),
-grouped by day, with a **Jump to latest** button for the common case of
-wanting the most recent activity without scrolling. It refreshes on the same
-interval as everything else while it's on screen.
+One screen, reachable two ways — both Admin-only:
+
+- **From a charger**, via the log icon in the icon row under the dial. Opens
+  with the message search seeded with that charger's id, so it starts
+  narrowed to that charger; back returns to the charger.
+- **From the drawer** ("Logs"), as a standalone tool with no seed; back
+  returns to the groups list.
+
+It's a full screen rather than a modal — a long scrolling list wants the
+whole viewport and the existing back arrow. Filters are time range (last 24
+hours by default, week, month), log type (**Audit**, the default, or **All**)
+and a free-text message search. The search is debounced so typing doesn't
+fire a request per keystroke, and the seeded charger id can simply be edited
+to widen the search. The list reads oldest-first (chronologically, like the
+underlying log file), grouped by day, with a **Jump to latest** button for
+the common case of wanting the most recent activity without scrolling. It
+refreshes on the same interval as everything else while it's on screen, and
+shows the emitting module per row when the type filter isn't narrowed to
+Audit.
 
 Three things about `GetLogs` shape this design:
 
 - **It is Admin-only.** Like the control commands it appears in no role's
-  `API_ALLOW` list, so the icon is hidden for everyone else rather than
-  offering an action the backend would reject.
+  `API_ALLOW` list, so both entry points are hidden for everyone else rather
+  than offering an action the backend would reject.
+- **"All" means omitting the `logger` filter**, not sending `"ALL"`. The
+  backend compares that field for equality, so a sentinel value would match
+  nothing at all — balanz-ui's own Logs page strips it the same way.
 - **A log record has no charger field.** Entries are just
   `{timestamp, level, logger, message}`, with audit lines carrying
   `logger: "AUDIT"`. "This charger's log" is therefore a `messageSearch`
@@ -614,9 +629,9 @@ src/
     SettingsPanel.jsx             Runtime server-address & refresh-interval editor (modal, reachable pre/post login)
     AboutPanel.jsx                Version / build date modal, opened from the menu
     UserMenu.jsx                  Header identity chip + account menu (sign out)
-    MenuDrawer.jsx                Drawer: Groups & status nav item + settings/about footer
+    MenuDrawer.jsx                Drawer: Groups & status + Logs nav items, settings/about footer
     GroupsScreen.jsx              Group status + charger picker (the navigation root)
-    LogsScreen.jsx / .css         Per-charger audit log with time-range chips (Admin only)
+    LogsScreen.jsx / .css         Log viewer: time range, log type and message search (Admin only)
     DialComponent.jsx             Selected charger detail, session data, controls
     ChargingDial.jsx / .css       Circular ring gauge; doubles as the drag-to-set current control
     ChargingHistoryChart.jsx/.css Reusable step chart of offered vs. usage current over time

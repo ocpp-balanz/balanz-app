@@ -3,6 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 're
 import {
   ApiError,
   AUDIT_LOGGER,
+  canViewLogs,
   clearAuthToken,
   clearSelectedChargerId,
   fetchChargerDetails,
@@ -25,7 +26,7 @@ import {
 import DialComponent from './components/DialComponent';
 import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
-import LogsScreen, { DEFAULT_LOG_RANGE, LOG_RANGES } from './components/LogsScreen';
+import LogsScreen, { DEFAULT_LOG_RANGE, LOG_ALL, LOG_RANGES } from './components/LogsScreen';
 import MenuDrawer from './components/MenuDrawer';
 import UserMenu from './components/UserMenu';
 
@@ -92,6 +93,13 @@ export default function App() {
   const [logsLoading, setLogsLoading] = useState(false);
   const [logsError, setLogsError] = useState('');
   const [logRange, setLogRange] = useState(DEFAULT_LOG_RANGE);
+  // 'charger' when opened from a charger's icon row (message search seeded
+  // with its id, back returns there); 'global' when opened from the drawer as
+  // a standalone tool. Same screen either way - only the starting filters and
+  // where "back" goes differ.
+  const [logScope, setLogScope] = useState('charger');
+  const [logLogger, setLogLogger] = useState(AUDIT_LOGGER);
+  const [logSearch, setLogSearch] = useState('');
 
   // Accordion state for the groups list. Held here, not in GroupsScreen,
   // because that component unmounts every time a charger is opened - keeping
@@ -154,6 +162,9 @@ export default function App() {
     setLogs([]);
     setLogsError('');
     setLogRange(DEFAULT_LOG_RANGE);
+    setLogScope('charger');
+    setLogLogger(AUDIT_LOGGER);
+    setLogSearch('');
   }
 
   function handleAuthFailure(error) {
@@ -222,17 +233,16 @@ export default function App() {
   }
 
   /**
-   * Audit entries for one charger.
+   * Log entries, optionally narrowed to one charger.
    *
-   * A log record carries no charger field, so "this charger's log" is a
-   * substring match on the message text (see fetchLogs in apiClient) using
-   * the charger *id* - it appears in every audit line, and unlike the alias
-   * it can't accidentally be a substring of another charger's name.
+   * A log record carries no charger field, so "this charger's log" is just a
+   * message-substring filter (see fetchLogs in apiClient) on the charger
+   * *id* - it appears in every audit line, and unlike the alias it can't
+   * accidentally be a substring of another charger's name. That's why the
+   * charger-scoped and standalone views are the same call with a different
+   * seed value.
    */
-  async function loadLogs(chargerId, rangeId, { quiet = false } = {}) {
-    if (!chargerId) {
-      return;
-    }
+  async function loadLogs(rangeId, loggerName, search, { quiet = false } = {}) {
     if (!quiet) {
       setLogsLoading(true);
       setLogsError('');
@@ -243,8 +253,11 @@ export default function App() {
 
     try {
       const entries = await fetchLogs({
-        logger: AUDIT_LOGGER,
-        messageSearch: chargerId,
+        // LOG_ALL means "don't filter by logger at all" - the backend
+        // compares this field for equality, so passing a sentinel value
+        // through would match nothing (balanz-ui strips it the same way).
+        logger: loggerName === LOG_ALL ? '' : loggerName,
+        messageSearch: search.trim(),
         timeStampStart: formatLogTimestamp(since),
       });
       setLogs(entries);
@@ -335,18 +348,18 @@ export default function App() {
   // keep it refreshing quietly while it's on screen - same rule as the groups
   // list: poll only what's actually being looked at.
   useEffect(() => {
-    if (authState !== 'authenticated' || view !== 'logs' || !selectedChargerId) {
+    if (authState !== 'authenticated' || view !== 'logs') {
       return undefined;
     }
 
-    void loadLogs(selectedChargerId, logRange);
+    void loadLogs(logRange, logLogger, logSearch);
     const intervalId = window.setInterval(() => {
-      void loadLogs(selectedChargerId, logRange, { quiet: true });
+      void loadLogs(logRange, logLogger, logSearch, { quiet: true });
     }, REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(intervalId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authState, view, selectedChargerId, logRange]);
+  }, [authState, view, logRange, logLogger, logSearch]);
 
   // Load the selected charger's detail whenever the selection changes or a
   // mutation (apply limit/priority, stop) requests a refresh.
@@ -630,16 +643,39 @@ export default function App() {
     resetSession('');
   }
 
-  function handleOpenLogs() {
+  // From a charger's icon row: seed the message search with its id so the
+  // screen opens already narrowed to that charger, and let it be edited from
+  // there to widen the search.
+  function handleOpenChargerLogs() {
     setLogs([]);
     setLogsError('');
+    setLogScope('charger');
+    setLogLogger(AUDIT_LOGGER);
+    setLogSearch(selectedChargerId);
+    setLogRange(DEFAULT_LOG_RANGE);
     setView('logs');
   }
 
-  // One level back: the audit log returns to its charger, the charger to the
-  // list it was picked from.
+  // From the drawer: the same screen as a standalone tool, unseeded.
+  function handleOpenLogs() {
+    setLogs([]);
+    setLogsError('');
+    setLogScope('global');
+    setLogLogger(AUDIT_LOGGER);
+    setLogSearch('');
+    setLogRange(DEFAULT_LOG_RANGE);
+    setMenuOpen(false);
+    setView('logs');
+  }
+
+  // One level back: a charger's log returns to that charger, the standalone
+  // log tool to the root, and the charger to the list it was picked from.
   function handleBack() {
-    setView(view === 'logs' ? 'dashboard' : 'groups');
+    if (view === 'logs') {
+      setView(logScope === 'charger' ? 'dashboard' : 'groups');
+      return;
+    }
+    setView('groups');
   }
 
   if (authState === 'checking') {
@@ -667,8 +703,10 @@ export default function App() {
       <MenuDrawer
         open={menuOpen}
         currentView={view}
+        canViewLogs={canViewLogs(userType)}
         onClose={() => setMenuOpen(false)}
         onOpenGroups={handleOpenGroups}
+        onOpenLogs={handleOpenLogs}
       />
 
       {/* Standard hierarchical-navigation header: a single leading slot,
@@ -694,8 +732,8 @@ export default function App() {
             <button
               className="menu-button"
               type="button"
-              aria-label={view === 'logs' ? 'Back to charger' : 'Back to groups'}
-              title={view === 'logs' ? 'Back to charger' : 'Back to groups'}
+              aria-label={view === 'logs' && logScope === 'charger' ? 'Back to charger' : 'Back to groups'}
+              title={view === 'logs' && logScope === 'charger' ? 'Back to charger' : 'Back to groups'}
               onClick={handleBack}
             >
               <BackIcon />
@@ -703,7 +741,7 @@ export default function App() {
           )}
           <h1>
             {view === 'logs'
-              ? 'Audit log'
+              ? 'Logs'
               : view === 'dashboard'
                 ? selectedCharger?.alias || 'Balanz'
                 : 'Balanz'}
@@ -738,12 +776,16 @@ export default function App() {
           />
         ) : view === 'logs' ? (
           <LogsScreen
-            charger={selectedCharger}
+            charger={logScope === 'charger' ? selectedCharger : null}
             entries={logs}
             loading={logsLoading}
             error={logsError}
             range={logRange}
             onRangeChange={setLogRange}
+            logger={logLogger}
+            onLoggerChange={setLogLogger}
+            search={logSearch}
+            onSearchChange={setLogSearch}
           />
         ) : selectedCharger ? (
           <section className="panel detail-panel">
@@ -756,7 +798,7 @@ export default function App() {
               onApplyMaxCurrent={handleApplyCurrentLimit}
               onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
-              onOpenLogs={handleOpenLogs}
+              onOpenLogs={handleOpenChargerLogs}
               isAllocationGroup={isAllocationGroup}
               userType={userType}
               draftPriority={draftPriority}

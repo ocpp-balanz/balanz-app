@@ -3,8 +3,49 @@
   gap: 1rem;
 }
 
-/* Time-range chips on the left, "Jump to latest" on the right; they stack
-   on a narrow screen rather than squeezing the chips. */
+/* Filter block: chip groups and the search field, stacking on narrow
+   screens. */
+.log-filters {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-color);
+}
+
+.log-search {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.log-search-label {
+  color: var(--muted-text);
+  font-size: 0.78rem;
+}
+
+.log-search input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background: var(--panel);
+  color: var(--text-color);
+  padding: 0.6rem 0.7rem;
+  outline: none;
+}
+
+.log-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.log-count {
+  color: var(--muted-text);
+  font-size: 0.82rem;
+}
+
+/* Entry count on the left, "Jump to latest" on the right; they stack on a
+   narrow screen rather than squeezing together. */
 .log-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -112,6 +153,16 @@
   font-size: 0.7rem;
   font-weight: 700;
   letter-spacing: 0.03em;
+}
+
+/* Emitting module, shown only when the log isn't filtered to AUDIT alone. */
+.log-logger {
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  background: var(--track-color);
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
 }
 
 .log-level {

@@ -16,7 +16,20 @@ function GroupsNavIcon() {
   );
 }
 
-export default function MenuDrawer({ open, currentView, onClose, onOpenGroups }) {
+// Material's "receipt_long", matching the audit-log icon on the charger
+// screen so the two entry points to the same tool look related.
+function LogsNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M19 5v14a3 3 0 0 1-3 3H5a3 3 0 0 1-3-3v-2h3V2l1.5 1.5L8 2l1.5 1.5L11 2l1.5 1.5L14 2l1.5 1.5L17 2l2 2zM7 9h8V7H7zm0 4h8v-2H7zm0 4h6v-2H7zm10 3a1 1 0 0 0 1-1V7h2v12a1 1 0 0 1-1 1z"
+      />
+    </svg>
+  );
+}
+
+export default function MenuDrawer({ open, currentView, canViewLogs, onClose, onOpenGroups, onOpenLogs }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
 
@@ -69,6 +82,25 @@ export default function MenuDrawer({ open, currentView, onClose, onOpenGroups })
               <small>Browse chargers by group</small>
             </span>
           </button>
+
+          {/* GetLogs is Admin-only server-side, so this entry is hidden for
+              other roles rather than leading to a NotAuthorized error. */}
+          {canViewLogs ? (
+            <button
+              type="button"
+              className={`menu-nav-item ${currentView === 'logs' ? 'is-active' : ''}`}
+              aria-current={currentView === 'logs' ? 'page' : undefined}
+              onClick={onOpenLogs}
+            >
+              <span className="menu-nav-icon">
+                <LogsNavIcon />
+              </span>
+              <span className="menu-nav-copy">
+                <strong>Logs</strong>
+                <small>Audit trail and system log</small>
+              </span>
+            </button>
+          ) : null}
         </nav>
 
         {/* Utility actions - deliberately understated (plain text rows,

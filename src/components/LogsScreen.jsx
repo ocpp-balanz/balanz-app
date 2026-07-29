@@ -1,6 +1,20 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
+import { AUDIT_LOGGER } from '../apiClient';
 import './LogsScreen.css';
+
+// Sentinel for "don't filter by logger at all". The backend compares the
+// logger field for equality, so this is stripped before the call rather than
+// sent (balanz-ui's own Logs page does the same).
+export const LOG_ALL = 'ALL';
+
+const LOG_TYPES = [
+  { id: AUDIT_LOGGER, label: 'Audit' },
+  { id: LOG_ALL, label: 'All' },
+];
+
+// Typing shouldn't fire a request per keystroke.
+const SEARCH_DEBOUNCE_MS = 400;
 
 // Windows offered as filter chips. Kept coarse deliberately: the view is
 // always narrowed to one charger and to audit entries only, which is a
@@ -45,8 +59,36 @@ function levelTone(level) {
   }
 }
 
-export default function LogsScreen({ charger, entries, loading, error, range, onRangeChange }) {
+export default function LogsScreen({
+  charger,
+  entries,
+  loading,
+  error,
+  range,
+  onRangeChange,
+  logger,
+  onLoggerChange,
+  search,
+  onSearchChange,
+}) {
   const endRef = useRef(null);
+
+  // The input is uncontrolled-ish on purpose: it updates locally on every
+  // keystroke but only pushes upward (triggering a request) once typing
+  // pauses. Re-synced when the prop changes from outside - e.g. opening the
+  // screen from a charger seeds it with that charger's id.
+  const [draftSearch, setDraftSearch] = useState(search ?? '');
+  useEffect(() => {
+    setDraftSearch(search ?? '');
+  }, [search]);
+
+  useEffect(() => {
+    if (draftSearch === search) {
+      return undefined;
+    }
+    const timeoutId = window.setTimeout(() => onSearchChange(draftSearch), SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [draftSearch, search, onSearchChange]);
 
   // Oldest first, so the log reads chronologically like the file it came
   // from. "Jump to latest" below covers the common case of wanting the most
@@ -63,15 +105,17 @@ export default function LogsScreen({ charger, entries, loading, error, range, on
     <section className="panel detail-panel logs-screen">
       <div className="section-header">
         <div>
-          <h2>Audit log</h2>
-          <p className="subtle">
-            {charger?.alias || charger?.chargerId}
-            {charger?.alias ? ` · ${charger.chargerId}` : ''}
-          </p>
+          <h2>{logger === AUDIT_LOGGER ? 'Audit log' : 'System log'}</h2>
+          {charger ? (
+            <p className="subtle">
+              {charger.alias || charger.chargerId}
+              {charger.alias ? ` · ${charger.chargerId}` : ''}
+            </p>
+          ) : null}
         </div>
       </div>
 
-      <div className="log-toolbar">
+      <div className="log-filters">
         <div className="log-ranges" role="group" aria-label="Time range">
           {LOG_RANGES.map((option) => (
             <button
@@ -85,6 +129,38 @@ export default function LogsScreen({ charger, entries, loading, error, range, on
             </button>
           ))}
         </div>
+
+        <div className="log-ranges" role="group" aria-label="Log type">
+          {LOG_TYPES.map((option) => (
+            <button
+              key={option.id}
+              type="button"
+              className={`log-range-chip ${logger === option.id ? 'is-active' : ''}`}
+              aria-pressed={logger === option.id}
+              onClick={() => onLoggerChange(option.id)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <label className="log-search">
+          <span className="log-search-label">Message search</span>
+          <input
+            type="search"
+            value={draftSearch}
+            onChange={(event) => setDraftSearch(event.target.value)}
+            placeholder="Charger id, tag, user name..."
+            autoComplete="off"
+            spellCheck="false"
+          />
+        </label>
+      </div>
+
+      <div className="log-toolbar">
+        <span className="log-count">
+          {ordered.length} {ordered.length === 1 ? 'entry' : 'entries'}
+        </span>
 
         {ordered.length > 0 ? (
           <button type="button" className="log-jump-button" onClick={jumpToLatest}>
@@ -108,7 +184,9 @@ export default function LogsScreen({ charger, entries, loading, error, range, on
       {loading && ordered.length === 0 ? <div className="inline-state">Loading audit log...</div> : null}
 
       {!loading && ordered.length === 0 && !error ? (
-        <div className="inline-state">No audit entries for this charger in the selected period.</div>
+        <div className="inline-state">
+          No {logger === AUDIT_LOGGER ? 'audit' : 'log'} entries match these filters.
+        </div>
       ) : null}
 
       <div className="log-list">
@@ -125,6 +203,11 @@ export default function LogsScreen({ charger, entries, loading, error, range, on
               <article className="log-entry">
                 <div className="log-entry-meta">
                   <time>{time}</time>
+                  {/* Which module emitted it only matters once the log isn't
+                      filtered down to AUDIT alone. */}
+                  {logger === LOG_ALL && entry.logger ? (
+                    <span className="log-logger">{entry.logger}</span>
+                  ) : null}
                   {category ? <span className="log-category">{category}</span> : null}
                   {/* INFO is the overwhelming majority, so only anything
                       needing attention gets a level chip. */}
