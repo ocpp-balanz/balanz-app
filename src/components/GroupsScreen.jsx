@@ -118,7 +118,6 @@ export default function GroupsScreen({
     <section className="panel detail-panel groups-screen">
       <div className="section-header">
         <div>
-          <p className="section-kicker">Groups</p>
           <h2>Group status</h2>
         </div>
         {/* No "back" affordance here - this screen is the navigation root
