@@ -158,11 +158,17 @@ export default function GroupsScreen({
                 <span className="group-chevron">
                   <ChevronIcon />
                 </span>
+                {/* Group id + charger count lead, with the free-text
+                    description demoted to the sub-line: the id is what the
+                    group is actually identified by everywhere else in the
+                    app, so it's the more scannable headline. */}
                 <div>
-                  <h3>{group.description || group.groupId}</h3>
-                  <p className="subtle">
+                  <h3>
                     {group.groupId} · {chargerCount} charger{chargerCount === 1 ? '' : 's'}
-                  </p>
+                  </h3>
+                  {group.description && group.description !== group.groupId ? (
+                    <p className="subtle">{group.description}</p>
+                  ) : null}
                 </div>
               </div>
               {group.isAllocationGroup ? (
