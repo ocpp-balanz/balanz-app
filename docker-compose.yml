@@ -3,7 +3,7 @@ services:
     build:
       context: .
       args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://ocpp34.duckdns.org/api}
     environment:
       # host:port of the real Balanz OCPP server, reachable from this
       # container over the local network - only used if VITE_API_BASE_URL
@@ -16,7 +16,7 @@ services:
     # likely OS for an on-prem server. Harmless to keep even when
     # BALANZ_UPSTREAM is overridden to a real LAN address instead.
     extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - "host.docker.internal:127.0.0.1"
     ports:
-      - "${HOST_PORT:-8081}:80"
+      - "${HOST_PORT:-8088}:80"
     restart: unless-stopped
