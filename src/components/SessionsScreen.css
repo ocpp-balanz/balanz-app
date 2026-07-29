@@ -1,0 +1,158 @@
+.sessions-screen {
+  display: grid;
+  gap: 1rem;
+}
+
+.session-filters {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-color);
+}
+
+.session-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.session-chip {
+  border: 1px solid var(--border-color);
+  background: var(--panel);
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.session-chip.is-active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.session-groupby {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
+.session-groupby-label {
+  color: var(--muted-text);
+  font-size: 0.78rem;
+}
+
+.session-total {
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}
+
+.session-list {
+  display: grid;
+  gap: 1rem;
+}
+
+.session-bucket {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Subtotal row for the week/month the sessions below belong to. Sticky so
+   the running totals stay visible while scrolling through a long bucket. */
+.session-bucket-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 0.75rem;
+  padding: 0.4rem 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.session-bucket-header strong {
+  font-size: 0.95rem;
+}
+
+.session-bucket-header span {
+  color: var(--muted-text);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.session-card {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-color);
+}
+
+.session-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.session-card-head strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.session-energy {
+  color: var(--success);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.9rem;
+  color: var(--text-color);
+  font-size: 0.84rem;
+}
+
+.session-meta-label {
+  color: var(--muted-text);
+  margin-right: 0.3rem;
+}
+
+.session-graph-button {
+  justify-self: start;
+  border: 1px solid var(--border-color);
+  background: var(--panel);
+  color: var(--text-color);
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.session-graph-button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .session-card {
+    padding: 0.6rem 0.65rem;
+  }
+
+  .session-meta {
+    font-size: 0.8rem;
+  }
+}
