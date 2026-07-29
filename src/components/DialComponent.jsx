@@ -1,6 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 
-import { canControlCharging, canSetChargePriority, canViewLogs, fetchTags } from '../apiClient';
+import {
+  canControlCharging,
+  canSetChargePriority,
+  canViewLogs,
+  fetchTags,
+  RESET_TYPES,
+} from '../apiClient';
 import ChargingDial from './ChargingDial';
 import ChargingHistoryChart from './ChargingHistoryChart';
 import './DialStyles.css';
@@ -99,6 +105,18 @@ function QueryStatsIcon() {
   );
 }
 
+// Material's "restart_alt" - the same icon balanz-ui uses for this action.
+function RestartIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M12 5V2L8 6l4 4V7c3.31 0 6 2.69 6 6 0 2.97-2.17 5.43-5 5.91v2.02c3.95-.49 7-3.85 7-7.93 0-4.42-3.58-8-8-8m-6 8c0-1.65.67-3.15 1.76-4.24L6.34 7.34C4.9 8.79 4 10.79 4 13c0 4.08 3.05 7.44 7 7.93v-2.02c-2.83-.48-5-2.94-5-5.91"
+      />
+    </svg>
+  );
+}
+
 // Material's "receipt_long" - a document with ruled lines, the closest thing
 // in that set to an audit trail.
 function AuditLogIcon() {
@@ -130,6 +148,7 @@ export default function DialComponent({
   onStartTransaction,
   onStopTransaction,
   onOpenLogs,
+  onResetCharger,
   isAllocationGroup,
   userType,
   draftPriority,
@@ -138,6 +157,7 @@ export default function DialComponent({
 }) {
   const [graphOpen, setGraphOpen] = useState(false);
   const [startModalOpen, setStartModalOpen] = useState(false);
+  const [resetModalOpen, setResetModalOpen] = useState(false);
   // Remote-start tag selection. The charger accepts any string as an id_tag,
   // so rather than a free-text field (which risks starting a session with an
   // id no real tag owns), the user picks a known tag from GetTags. `tagSearch`
@@ -199,6 +219,9 @@ export default function DialComponent({
   // GetLogs is Admin-only server-side, so don't offer the entry point to
   // anyone who'd just get NotAuthorized back.
   const canSeeLogs = canViewLogs(userType) && Boolean(onOpenLogs);
+  // Reset is Admin-only too, and the backend rejects it outright when the
+  // charger has no live OCPP link - there's nothing to send the command to.
+  const canReset = isAdmin && Boolean(onResetCharger) && Boolean(charger.networkConnected);
   // Direct current-limit control only makes sense outside SmartCharging
   // groups (Balanz's own allocation loop owns the offer there).
   const isDirectControl = canStop && !isAllocationGroup && isAdmin;
@@ -350,7 +373,7 @@ export default function DialComponent({
             </div>
           ) : null}
 
-          {isAdmin || hasGraphAccess || canSeeLogs ? (
+          {isAdmin || hasGraphAccess || canSeeLogs || canReset ? (
             <div className="dial-transport-row">
               {isAdmin ? (
                 canStop ? (
@@ -399,6 +422,19 @@ export default function DialComponent({
                   title="View audit log"
                 >
                   <AuditLogIcon />
+                </button>
+              ) : null}
+
+              {canReset ? (
+                <button
+                  type="button"
+                  className="icon-button icon-button-reset"
+                  onClick={() => setResetModalOpen(true)}
+                  disabled={saving || loading}
+                  aria-label="Reset charger"
+                  title="Reset charger"
+                >
+                  <RestartIcon />
                 </button>
               ) : null}
             </div>
@@ -486,9 +522,6 @@ export default function DialComponent({
                 <p className="section-kicker">Remote start</p>
                 <h3>Start charging</h3>
               </div>
-              <button className="ghost-button" type="button" onClick={() => setStartModalOpen(false)}>
-                Close
-              </button>
             </div>
 
             <form className="auth-form" onSubmit={handleStartSubmit}>
@@ -550,6 +583,66 @@ export default function DialComponent({
                 </button>
               </div>
             </form>
+          </div>
+        </>
+      ) : null}
+
+      {/* Confirmation before rebooting a charger, wording and Soft/Hard
+          choice matching balanz-ui's own ResetCharger dialog. Both options
+          sit behind the confirmation rather than as separate icons: reset is
+          rare and disruptive, so it shouldn't be one stray tap away. */}
+      {resetModalOpen ? (
+        <>
+          <button
+            type="button"
+            className="menu-backdrop is-open"
+            aria-label="Close"
+            onClick={() => setResetModalOpen(false)}
+          />
+          <div className="modal-panel panel">
+            {/* No Close button up here: the action row below already ends in
+                Cancel, and two ways to dismiss in one small dialog is just
+                noise. (The backdrop still dismisses too.) */}
+            <div className="modal-panel-header">
+              <div>
+                <p className="section-kicker">Charger</p>
+                <h3>Confirm charger reset</h3>
+              </div>
+            </div>
+
+            <p className="subtle">
+              Reset {charger.alias} ({charger.chargerId})? A <strong>soft</strong> reset restarts the
+              charger&apos;s software and ends any running session gracefully. A <strong>hard</strong> reset
+              reboots it as if the power had been cycled.
+            </p>
+
+            <div className="action-row">
+              <button
+                className="primary-button"
+                type="button"
+                disabled={saving || loading}
+                onClick={() => {
+                  setResetModalOpen(false);
+                  onResetCharger(RESET_TYPES.SOFT);
+                }}
+              >
+                Soft reset
+              </button>
+              <button
+                className="secondary-button is-danger"
+                type="button"
+                disabled={saving || loading}
+                onClick={() => {
+                  setResetModalOpen(false);
+                  onResetCharger(RESET_TYPES.HARD);
+                }}
+              >
+                Hard reset
+              </button>
+              <button className="secondary-button" type="button" onClick={() => setResetModalOpen(false)}>
+                Cancel
+              </button>
+            </div>
           </div>
         </>
       ) : null}

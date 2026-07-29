@@ -171,6 +171,7 @@ offers an action the backend would reject:
 | Action | Required role(s) |
 | --- | --- |
 | Start a session, stop a session, set a current limit | `Admin` only |
+| Reset (reboot) a charger | `Admin` only |
 | View the audit log (`GetLogs`) | `Admin` only |
 | Set session priority | `SessionPriority`, `Tags`, or `Admin` |
 
@@ -204,6 +205,15 @@ All of these live in the charger dashboard, directly on or under the dial:
 - **Charging graph — a QueryStats icon button** next to Play/Stop, matching
   balanz-ui's own icon for the same thing. Unlike Play/Stop it isn't
   Admin-gated: anyone who can see a session with history can view its graph.
+- **Reset — a restart icon button**, Admin-only, and shown only while the
+  charger actually has an OCPP link (the backend rejects the command outright
+  otherwise, since there's nothing to send it to). It always opens a
+  confirmation naming the charger, which is where the choice between a
+  **soft** reset (restart the charger's software, ending a running session
+  gracefully) and a **hard** reset (reboot as if power-cycled) is made —
+  mirroring balanz-ui's own dialog. Keeping both behind the confirmation
+  means a disruptive reboot is never one stray tap away. `type` is sent
+  explicitly rather than relying on the backend's Soft default.
 
 ## Logs
 
@@ -601,8 +611,10 @@ allocation/SmartCharging group — see "Group types & permissions" above) and
 Control actions use `SetTxProfile` (current limit, Admin-only),
 `SetChargePriority` (session priority, `SessionPriority`/`Tags`/`Admin`),
 `RemoteStartTransaction` (start, Admin-only — requires `charger_id`,
-`connector_id` and `id_tag`) and `RemoteStopTransaction` (stop, Admin-only —
-requires `charger_id` and `transaction_id`). See `src/apiClient.js` for the
+`connector_id` and `id_tag`), `RemoteStopTransaction` (stop, Admin-only —
+requires `charger_id` and `transaction_id`) and `Reset` (Admin-only —
+`charger_id` plus `type` of `"Soft"` or `"Hard"`; the charger must be
+connected). See `src/apiClient.js` for the
 full mapping, normalization, and the `USER_TYPES` / `canControlCharging` /
 `canSetChargePriority` role helpers.
 

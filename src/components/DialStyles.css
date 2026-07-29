@@ -97,6 +97,19 @@
   background: var(--secondary);
 }
 
+/* Reset - disruptive, so it's warning-coloured rather than sharing the
+   neutral view-action treatment, and always behind a confirmation. */
+.icon-button-reset {
+  background: var(--warning);
+}
+
+/* Destructive choice inside a confirmation dialog. */
+.secondary-button.is-danger {
+  border-color: transparent;
+  background: var(--error-bg);
+  color: var(--error);
+}
+
 .hero-copy {
   min-width: 0;
   display: grid;

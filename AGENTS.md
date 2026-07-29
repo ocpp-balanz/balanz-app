@@ -31,7 +31,11 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   picker elsewhere.
 - All control actions must be routed through the backend API.
 - Gate every control on the signed-in user's role so the UI never offers an
-  action the backend would reject.
+  action the backend would reject. Where the backend has further
+  preconditions (e.g. Reset needs a live OCPP link), respect those too.
+- Disruptive or irreversible actions (resetting a charger) go behind a
+  confirmation that names what will be affected, rather than firing on a
+  single tap.
 - Data refreshes automatically on a user-configurable interval; do not add
   manual refresh buttons.
 - Browser support is required; do not depend on native-only behavior for core flows.

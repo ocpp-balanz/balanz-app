@@ -18,6 +18,7 @@ import {
   logout as logoutRequest,
   remoteStartTransaction,
   remoteStopTransaction,
+  resetCharger,
   resumeStoredLogin,
   setChargePriority,
   setTxProfile,
@@ -613,6 +614,31 @@ export default function App() {
     }
   }
 
+  // Soft or Hard OCPP reset. The charger drops its connection while it
+  // reboots, so the usual follow-up refresh is scheduled to pick up the
+  // resulting state once it comes back.
+  async function handleResetCharger(type) {
+    if (!selectedCharger) {
+      setDetailError('No charger is selected.');
+      return;
+    }
+
+    setSaving(true);
+    setDetailError('');
+    setNotice('');
+
+    try {
+      await resetCharger({ chargerId: selectedCharger.chargerId, type });
+      setNotice(`${type} reset requested.`);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      setDetailError(formatError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleStopTransaction() {
     const connector = selectedCharger?.activeConnector;
     if (!selectedCharger || !connector || !connector.transactionId) {
@@ -799,6 +825,7 @@ export default function App() {
               onStartTransaction={handleStartTransaction}
               onStopTransaction={handleStopTransaction}
               onOpenLogs={handleOpenChargerLogs}
+              onResetCharger={handleResetCharger}
               isAllocationGroup={isAllocationGroup}
               userType={userType}
               draftPriority={draftPriority}

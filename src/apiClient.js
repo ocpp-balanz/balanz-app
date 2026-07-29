@@ -638,6 +638,23 @@ class BalanzWebsocketClient {
     }));
   }
 
+  /**
+   * OCPP Reset. `type` is "Soft" (restart the charge point's application,
+   * ending transactions gracefully) or "Hard" (reboot as if power-cycled).
+   * The backend defaults to Soft when the field is missing, but this always
+   * sends it explicitly - which of the two ran shouldn't depend on a default.
+   *
+   * Admin-only, and the backend additionally requires the charger to be known
+   * and currently connected (it's in the same pre-check list as SetTxProfile
+   * and the remote start/stop commands).
+   */
+  async resetCharger({ chargerId, type }) {
+    return this.call('Reset', {
+      charger_id: chargerId,
+      type,
+    });
+  }
+
   async setChargePriority({ chargerId, connectorId, priority }) {
     return this.call('SetChargePriority', {
       charger_id: chargerId,
@@ -859,6 +876,13 @@ export async function setChargePriority(payload) {
 
 export async function fetchLogs(filters) {
   return client.fetchLogs(filters);
+}
+
+// OCPP ResetType values, spelled as the protocol (and balanz-ui) send them.
+export const RESET_TYPES = { SOFT: 'Soft', HARD: 'Hard' };
+
+export async function resetCharger(payload) {
+  return client.resetCharger(payload);
 }
 
 export function getConnectionStatus() {
