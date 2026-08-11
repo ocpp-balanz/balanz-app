@@ -36,8 +36,16 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   picker elsewhere.
 - All control actions must be routed through the backend API.
 - Gate every control on the signed-in user's role so the UI never offers an
-  action the backend would reject. Where the backend has further
-  preconditions (e.g. Reset needs a live OCPP link), respect those too.
+  action the backend would reject. Where the backend or the protocol has
+  further preconditions, respect those too: Reset needs a live OCPP link,
+  and a remote start only makes sense on a connector that is Preparing or
+  Finishing, since OCPP cannot start a session on one with nothing plugged
+  in.
+- Where an action needs an identifier the backend cannot invent, let the
+  user pick from what the backend already knows rather than type it. A
+  remote start's `id_tag` is chosen from the registered tags (`GetTags`,
+  Blocked ones excluded), because the charger accepts any string and a typed
+  one can authorize a session against a tag nobody owns.
 - Disruptive or irreversible actions (resetting a charger) go behind a
   confirmation that names what will be affected, rather than firing on a
   single tap.
@@ -130,4 +138,6 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   stale, and keep the update polling in `src/main.jsx` - see "Deploying
   updates to an installed PWA" in the README.
 - Prefer changes that improve browser and mobile parity together.
-- Use `VITE_API_BASE_URL=http://localhost:8000` when testing against the local gateway.
+- Use `VITE_API_BASE_URL=http://localhost:8000` when testing against a
+  locally running Balanz server. There is no separate REST gateway - the app
+  derives its WebSocket URL from this value directly.

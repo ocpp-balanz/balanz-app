@@ -16,9 +16,10 @@ const LOG_TYPES = [
 // Typing shouldn't fire a request per keystroke.
 const SEARCH_DEBOUNCE_MS = 400;
 
-// Windows offered as filter chips. Kept coarse deliberately: the view is
-// always narrowed to one charger and to audit entries only, which is a
-// modest number of lines, so finer-grained windows would be busywork.
+// Windows offered as filter chips. Kept coarse deliberately: the message
+// search and the Audit-only default already do most of the narrowing, and
+// GetLogs has no pagination - the time window exists to bound the payload,
+// not to be a precision instrument.
 export const LOG_RANGES = [
   { id: '24h', label: '24 hours', hours: 24 },
   { id: '7d', label: 'Last week', hours: 24 * 7 },

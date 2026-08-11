@@ -28,9 +28,9 @@ It runs in the browser during development and is wrapped with
   it takes only a raw history array as input and has no fetch logic of its
   own.
 - Adjust the current limit on an active session by **dragging the dial
-  itself**, adjust session priority with a stepper, or start/stop a session
-  — gated by the charger's group type and the signed-in user's role (see
-  "Group types & permissions" and "Charger controls" below).
+  itself**, adjust session priority with a 0–10 field, or start/stop a
+  session — gated by the charger's group type and the signed-in user's role
+  (see "Group types & permissions" and "Charger controls" below).
 - Sessions started without an RFID scan ("Free Vending" chargers) are shown
   with a "Free vending" badge instead of a misleading user name (see
   "Free Vending sessions" below).
@@ -198,14 +198,28 @@ All of these live in the charger dashboard, directly on or under the dial:
   0 A is genuinely useful: it makes the charger settle into `SuspendedEVSE`
   rather than stopping the session.
 - **Start / stop — Play and Stop icon buttons** below the dial, shown only
-  to `Admin` users. Stopping issues `RemoteStopTransaction`. Starting opens
-  a small dialog first, because `RemoteStartTransaction` requires an
-  `id_tag` the backend cannot invent (a real session normally begins with an
-  RFID scan at the charger); the field is prefilled with the charger's own
-  id, the same convention this app already uses to detect and label
-  "Free vending" sessions.
-- **Session priority — a −/value/+ stepper** (allocation groups only),
-  applied with its own button.
+  to `Admin` users, and only one at a time: Stop while a session is running
+  (`RemoteStopTransaction`), Play otherwise — but Play appears *only* when
+  the connector is `Preparing` or `Finishing`. OCPP has no notion of
+  remotely starting a session on a connector that is simply `Available`
+  (nothing is plugged in yet), so offering the button there would promise
+  something the charger cannot do.
+- **Picking the tag for a remote start.** Starting opens a dialog first,
+  because `RemoteStartTransaction` requires an `id_tag` the backend cannot
+  invent (a real session normally begins with an RFID scan at the charger).
+  The dialog is a **picker over the tags Balanz already knows** (`GetTags`),
+  not a free-text field — any string is accepted by the charger, so typing
+  one by hand risks starting a session against an id no real tag owns.
+  Blocked tags are left out (the backend would reject them anyway), the
+  search matches user name or the raw `id_tag`, and the rendered list is
+  capped at 50 rows, so a broad search is narrowed rather than painted in
+  full. Start stays disabled until a tag is selected; what gets sent is that
+  tag's `id_tag`.
+- **Session priority — a 0–10 number field** (allocation groups only, and
+  only while a session is actually running — priority applies to a
+  transaction, so there is nothing to set without one). A check button
+  appears next to it once the value differs from the backend's, and applies
+  the change.
 - **Charging graph — a QueryStats icon button** next to Play/Stop, matching
   balanz-ui's own icon for the same thing. Unlike Play/Stop it isn't
   Admin-gated: anyone who can see a session with history can view its graph.
@@ -484,8 +498,9 @@ plugin was needed.
 npm install
 ```
 
-Configure the backend URL in `.env.local` (already present with a sensible
-local default):
+Configure the backend URL in `.env.local`. That file is git-ignored, so a
+fresh clone does not have one — copy [`.env.example`](./.env.example) to
+`.env.local` and adjust it:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000
@@ -494,8 +509,7 @@ VITE_API_BASE_URL=http://localhost:8000
 The app derives the WebSocket URL from this value automatically
 (`http` → `ws`, `https` → `wss`, appending `/api`). Point it at wherever your
 Balanz server's host/port are, e.g. `https://ocpp.example.com` for a
-deployment behind TLS. You can copy [`.env.example`](./.env.example) to
-`.env.local` and adjust it as needed.
+deployment behind TLS.
 
 Optionally set `VITE_ASSUMED_VOLTAGE_V` (defaults to `230`) and
 `VITE_ASSUMED_PHASES` (defaults to `3`). Balanz reports live current draw in
@@ -670,6 +684,15 @@ requires `charger_id` and `transaction_id`) and `Reset` (Admin-only —
 connected). See `src/apiClient.js` for the
 full mapping, normalization, and the `USER_TYPES` / `canControlCharging` /
 `canSetChargePriority` role helpers.
+
+`GetTags` backs the remote-start tag picker described under "Charger
+controls". A tag carries `id_tag` (the RFID value actually sent to the
+charger), `user_name` (the label it is picked by), `parent_id_tag`,
+`status` (`Activated` / `Blocked`) and `priority`; the free-form
+`description` is deliberately not used for selection, since it is not a
+reliable identifier. The call is made once per app session, lazily, the
+first time the start dialog is opened — and that dialog is Admin-only, so
+no other role reaches it.
 
 Note that `energy_meter` is the meter's cumulative reading, not the energy
 delivered by the current session, so the app displays
