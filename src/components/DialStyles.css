@@ -45,15 +45,21 @@
   text-align: center;
 }
 
+/* The action buttons. There are six of them at most (stop/start, schedule,
+   graph, sessions, logs, reset), which at a fixed 56px overflowed a phone -
+   so they size with the viewport and wrap rather than being cut off if more
+   are ever added. */
 .dial-transport-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 0.75rem;
+  gap: clamp(0.2rem, 1vw, 0.75rem);
 }
 
 .icon-button {
-  width: 56px;
-  height: 56px;
+  width: clamp(44px, 12.5vw, 56px);
+  height: clamp(44px, 12.5vw, 56px);
+  flex: 0 0 auto;
   border-radius: 999px;
   border: none;
   display: inline-flex;
@@ -461,10 +467,8 @@
     font-size: 0.85rem;
   }
 
-  .icon-button {
-    width: 56px;
-    height: 56px;
-  }
+  /* Size is handled by the clamp on .icon-button above - pinning it here is
+     what made six buttons overflow a phone. */
 
   .hero-meta {
     font-size: 0.88rem;
