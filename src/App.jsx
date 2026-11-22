@@ -23,9 +23,11 @@ import {
   resetCharger,
   resumeStoredLogin,
   setChargePriority,
+  setDelayedCharging,
   setTxProfile,
   storeSelectedChargerId,
 } from './apiClient';
+import { forgetSchedule, getSchedule, rememberSchedule } from './delayedCharging';
 import DialComponent from './components/DialComponent';
 import GroupsScreen from './components/GroupsScreen';
 import LoginScreen from './components/LoginScreen';
@@ -91,6 +93,10 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [draftMaxCurrent, setDraftMaxCurrent] = useState(null);
   const [draftPriority, setDraftPriority] = useState(null);
+  // A delayed start noted on this device for the selected charger, or null.
+  // Balanz does not report schedules back, so this is the app's own record -
+  // see src/delayedCharging.js.
+  const [pendingSchedule, setPendingSchedule] = useState(null);
 
   const [groups, setGroups] = useState([]);
   const [groupsLoading, setGroupsLoading] = useState(false);
@@ -457,6 +463,24 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authState, selectedChargerId, detailRefreshToken]);
 
+  // Pick up any delayed start noted on this device for the selected charger.
+  //
+  // Keyed on the transaction id as well as the charger, so a note left over
+  // from a previous session is dropped rather than shown against the current
+  // one - the charger discards the schedule when its transaction ends, so a
+  // stale note would be a lie. Runs on every detail refresh, which is also what
+  // notices a transaction ending while the screen is open.
+  useEffect(() => {
+    const connector = selectedCharger?.activeConnector;
+    if (!selectedCharger || !connector?.transactionId) {
+      setPendingSchedule(null);
+      return;
+    }
+    setPendingSchedule(
+      getSchedule({ chargerId: selectedCharger.chargerId, transactionId: connector.transactionId }),
+    );
+  }, [selectedCharger]);
+
   // Background polling of the selected charger's detail.
   useEffect(() => {
     if (authState !== 'authenticated' || !selectedChargerId) {
@@ -627,6 +651,91 @@ export default function App() {
       // needs a moment to apply the change, so an immediate reload tends to
       // just redisplay the pre-change state. scheduleFollowUpRefresh below
       // is the only refresh triggered by this action.
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      setDetailError(formatError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * Schedule the running session to begin charging at a later time.
+   *
+   * `startTime` arrives as local wall-clock "YYYY-MM-DD HH:MM:SS", which is what
+   * the backend expects. The limit sent is whatever the dial currently shows, so
+   * the user schedules the limit they can see rather than a second, hidden one.
+   *
+   * Balanz keeps no record of the schedule, so the app notes it locally (see
+   * src/delayedCharging.js) purely to be able to say a delay is pending.
+   */
+  async function handleScheduleDelayedCharging(startTime) {
+    const connector = selectedCharger?.activeConnector;
+    if (!selectedCharger || !connector || !connector.transactionId) {
+      setDetailError('No active session is available to schedule.');
+      return;
+    }
+
+    const limit = Number(draftMaxCurrent ?? connector.offered ?? selectedCharger.connMax ?? 16);
+
+    setSaving(true);
+    setDetailError('');
+    setNotice('');
+
+    try {
+      await setDelayedCharging({
+        chargerId: selectedCharger.chargerId,
+        connectorId: connector.connectorId,
+        limit,
+        startTime,
+      });
+      rememberSchedule({
+        chargerId: selectedCharger.chargerId,
+        transactionId: connector.transactionId,
+        startTime,
+      });
+      setPendingSchedule(startTime);
+      setNotice(`Charging scheduled for ${startTime.slice(11, 16)} at ${limit} A.`);
+      scheduleFollowUpRefresh(selectedCharger.chargerId);
+    } catch (error) {
+      if (handleAuthFailure(error)) return;
+      setDetailError(formatError(error));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  /**
+   * Cancel a pending delay and charge now.
+   *
+   * There is no "clear schedule" command: setting an ordinary immediate limit
+   * replaces the scheduled profile, since both use the same charging profile id
+   * and stack level on the charger.
+   */
+  async function handleChargeNow() {
+    const connector = selectedCharger?.activeConnector;
+    if (!selectedCharger || !connector || !connector.transactionId) {
+      setDetailError('No active session is available.');
+      return;
+    }
+
+    const limit = Number(draftMaxCurrent ?? connector.offered ?? selectedCharger.connMax ?? 16);
+
+    setSaving(true);
+    setDetailError('');
+    setNotice('');
+
+    try {
+      await setTxProfile({
+        chargerId: selectedCharger.chargerId,
+        connectorId: connector.connectorId,
+        transactionId: connector.transactionId,
+        limit,
+      });
+      forgetSchedule(selectedCharger.chargerId);
+      setPendingSchedule(null);
+      setNotice(`Charging now at ${limit} A.`);
       scheduleFollowUpRefresh(selectedCharger.chargerId);
     } catch (error) {
       if (handleAuthFailure(error)) return;
@@ -990,6 +1099,9 @@ export default function App() {
               draftPriority={draftPriority}
               onDraftPriorityChange={setDraftPriority}
               onApplyPriority={handleApplyPriority}
+              pendingSchedule={pendingSchedule}
+              onScheduleDelayedCharging={handleScheduleDelayedCharging}
+              onChargeNow={handleChargeNow}
             />
           </section>
         ) : (

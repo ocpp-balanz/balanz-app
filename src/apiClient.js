@@ -80,6 +80,14 @@ export function canSetChargePriority(userType) {
   return [USER_TYPES.SESSION_PRIORITY, USER_TYPES.TAGS, USER_TYPES.ADMIN].includes(userType);
 }
 
+// Scheduling a delayed start is gated on Admin here even though the backend
+// also permits SessionPriority and Tags. Cancelling a schedule means setting an
+// ordinary limit with SetTxProfile, which IS Admin-only, so a wider gate would
+// let a user arrange a delay they could not then lift.
+export function canScheduleCharging(userType) {
+  return userType === USER_TYPES.ADMIN;
+}
+
 // GetLogs isn't in any role's API_ALLOW list either, so it's Admin-only.
 export function canViewLogs(userType) {
   return userType === USER_TYPES.ADMIN;
@@ -633,6 +641,31 @@ class BalanzWebsocketClient {
     });
   }
 
+  /**
+   * Hold the running session at 0 A until startTime, then allow `limit` Amps -
+   * so a car plugged in during the evening only draws power once the cheap
+   * night tariff begins.
+   *
+   * The backend sets an OCPP TxProfile carrying both periods, so the charger
+   * starts by itself at the appointed time with no further call from the app.
+   * Being a TxProfile it dies with the transaction: unplugging cancels it.
+   *
+   * startTime is local wall-clock time as "YYYY-MM-DD HH:MM:SS", which is how
+   * the backend reads it. Only accepted for chargers in non-allocation groups
+   * (GroupIsManaged otherwise), and only while a session is running.
+   *
+   * There is no "clear" command - setTxProfile replaces the schedule with an
+   * ordinary immediate limit, which is how the app cancels one.
+   */
+  async setDelayedCharging({ chargerId, connectorId, limit, startTime }) {
+    return this.call('SetDelayedCharging', {
+      charger_id: chargerId,
+      connector_id: Number(connectorId) || 1,
+      limit,
+      start_time: startTime,
+    });
+  }
+
   async remoteStopTransaction({ chargerId, transactionId }) {
     return this.call('RemoteStopTransaction', {
       charger_id: chargerId,
@@ -926,6 +959,10 @@ export async function fetchTags() {
 
 export async function setTxProfile(payload) {
   return client.setTxProfile(payload);
+}
+
+export async function setDelayedCharging(payload) {
+  return client.setDelayedCharging(payload);
 }
 
 export async function remoteStopTransaction(payload) {

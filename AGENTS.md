@@ -34,6 +34,16 @@ While Balanz also has a full web UI, this app is meant to be a minimal scope App
   navigation root; the charger screen is the detail view drilled into from
   it, returning via a back arrow. Do not add a second, redundant charger
   picker elsewhere.
+- A session on a charger Balanz does not balance may be scheduled to start
+  charging later, so a car plugged in during the evening draws power only
+  once the cheap tariff begins. The charger performs the delay itself; the
+  app is not involved when the time comes, and need not be running. Offer it
+  only for non-allocation groups - Balanz own loop owns the charging profile
+  elsewhere and would discard the schedule. Gate it on Admin in the app:
+  cancelling means setting an ordinary limit, which is Admin-only, and a
+  control that can be set but not unset is worse than no control. While
+  waiting the charger looks suspended, so always name the pending schedule
+  in the UI rather than leaving an apparently idle charger.
 - All control actions must be routed through the backend API.
 - Gate every control on the signed-in user's role so the UI never offers an
   action the backend would reject. Where the backend has further

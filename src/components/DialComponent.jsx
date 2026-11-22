@@ -2,11 +2,13 @@ import React, { useEffect, useRef, useState } from 'react';
 
 import {
   canControlCharging,
+  canScheduleCharging,
   canSetChargePriority,
   canViewLogs,
   fetchTags,
   RESET_TYPES,
 } from '../apiClient';
+import { resolveScheduleTime, scheduleTimeLabel } from '../delayedCharging';
 import ChargingDial from './ChargingDial';
 import ChargingGraphModal from './ChargingGraphModal';
 import './DialStyles.css';
@@ -22,6 +24,10 @@ const ASSUMED_PHASES = Number(import.meta.env.VITE_ASSUMED_PHASES) || 3;
 // Minimum non-zero current the dial can be dragged to - 0A is also allowed
 // (see ChargingDial's snapToAllowedValue), just nothing in between.
 const MIN_DIRECT_CURRENT_A = 6;
+
+// Default offered when arranging a delayed start - the cheap-tariff hours are
+// the reason this exists.
+const DEFAULT_SCHEDULE_TIME = '00:45';
 
 function pad2(n) {
   return String(n).padStart(2, '0');
@@ -117,6 +123,18 @@ function HistoryIcon() {
   );
 }
 
+// Material's "schedule" - a clock face, for arranging a later start.
+function ScheduleIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <path
+        fill="currentColor"
+        d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2M12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8m.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"
+      />
+    </svg>
+  );
+}
+
 // Material's "restart_alt" - the same icon balanz-ui uses for this action.
 function RestartIcon() {
   return (
@@ -167,10 +185,17 @@ export default function DialComponent({
   draftPriority,
   onDraftPriorityChange,
   onApplyPriority,
+  pendingSchedule,
+  onScheduleDelayedCharging,
+  onChargeNow,
 }) {
   const [graphOpen, setGraphOpen] = useState(false);
   const [startModalOpen, setStartModalOpen] = useState(false);
   const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [scheduleModalOpen, setScheduleModalOpen] = useState(false);
+  // "HH:MM" as an <input type="time"> wants it. Defaults to the small hours,
+  // which is the whole point of the feature.
+  const [scheduleTime, setScheduleTime] = useState(DEFAULT_SCHEDULE_TIME);
   // Remote-start tag selection. The charger accepts any string as an id_tag,
   // so rather than a free-text field (which risks starting a session with an
   // id no real tag owns), the user picks a known tag from GetTags. `tagSearch`
@@ -236,6 +261,12 @@ export default function DialComponent({
   // Direct current-limit control only makes sense outside SmartCharging
   // groups (Balanz's own allocation loop owns the offer there).
   const isDirectControl = canStop && !isAllocationGroup && isAdmin;
+  // Delaying a start is the same situation as direct limit control - a running
+  // session on a charger Balanz is not balancing - with its own Admin gate so
+  // the reason for the restriction stays visible. The backend refuses an
+  // allocation group outright (GroupIsManaged), since its own loop would
+  // overwrite the schedule within seconds.
+  const canSchedule = canStop && !isAllocationGroup && canScheduleCharging(userType);
 
   const userDisplay = session
     ? session.isFreeVending
@@ -384,7 +415,18 @@ export default function DialComponent({
             </div>
           ) : null}
 
-          {isAdmin || hasGraphAccess || canSeeLogs || canSeeSessions || canReset ? (
+          {pendingSchedule ? (
+            // The charger sits at 0 A in SuspendedEVSE while waiting, which
+            // looks exactly like a fault unless it is named. Balanz does not
+            // report schedules back, so this reflects what this device asked
+            // for - see src/delayedCharging.js.
+            <div className="dial-readout dial-readout-scheduled">
+              <span>Charging scheduled</span>
+              <output>{scheduleTimeLabel(pendingSchedule)}</output>
+            </div>
+          ) : null}
+
+          {isAdmin || hasGraphAccess || canSeeLogs || canSeeSessions || canReset || canSchedule ? (
             <div className="dial-transport-row">
               {isAdmin ? (
                 canStop ? (
@@ -410,6 +452,35 @@ export default function DialComponent({
                     <PlayIcon />
                   </button>
                 ) : null
+              ) : null}
+
+              {canSchedule ? (
+                pendingSchedule ? (
+                  <button
+                    type="button"
+                    className="icon-button icon-button-scheduled"
+                    onClick={onChargeNow}
+                    disabled={saving || loading}
+                    aria-label="Charge now, cancelling the schedule"
+                    title={`Scheduled for ${scheduleTimeLabel(pendingSchedule)} - tap to charge now`}
+                  >
+                    <ScheduleIcon />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="icon-button icon-button-schedule"
+                    onClick={() => {
+                      setScheduleTime(DEFAULT_SCHEDULE_TIME);
+                      setScheduleModalOpen(true);
+                    }}
+                    disabled={saving || loading}
+                    aria-label="Schedule charging for later"
+                    title="Schedule charging for later"
+                  >
+                    <ScheduleIcon />
+                  </button>
+                )
               ) : null}
 
               {hasGraphAccess ? (
@@ -530,6 +601,71 @@ export default function DialComponent({
         )}
 
       </section>
+
+      {scheduleModalOpen ? (
+        <>
+          <button
+            type="button"
+            className="menu-backdrop is-open"
+            aria-label="Close"
+            onClick={() => setScheduleModalOpen(false)}
+          />
+          <div className="modal-panel panel">
+            <div className="modal-panel-header">
+              <div>
+                <p className="section-kicker">Delayed start</p>
+                <h3>Schedule charging</h3>
+              </div>
+            </div>
+
+            <form
+              className="auth-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const startTime = resolveScheduleTime(scheduleTime);
+                if (!startTime) return;
+                setScheduleModalOpen(false);
+                onScheduleDelayedCharging(startTime);
+              }}
+            >
+              <label className="field">
+                <span>Start charging at</span>
+                <input
+                  type="time"
+                  value={scheduleTime}
+                  onChange={(event) => setScheduleTime(event.target.value)}
+                  required
+                />
+              </label>
+
+              <p className="subtle">
+                The charger holds at 0 A until {scheduleTime || '--:--'} and then charges at{' '}
+                {draftValue} A, the limit shown on the dial. It starts on its own - the app does
+                not need to be open. A time already past today is taken as tomorrow.
+              </p>
+
+              <p className="subtle">
+                While waiting the charger reports <strong>SuspendedEVSE</strong>, which is normal.
+                Unplugging the car cancels the schedule.
+              </p>
+
+              <div className="action-row">
+                <button className="primary-button" type="submit" disabled={saving || loading || !scheduleTime}>
+                  {saving ? 'Scheduling...' : 'Schedule'}
+                </button>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => setScheduleModalOpen(false)}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
+      ) : null}
 
       {startModalOpen ? (
         <>

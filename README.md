@@ -177,6 +177,7 @@ offers an action the backend would reject:
 | Reset (reboot) a charger | `Admin` only |
 | View the audit log (`GetLogs`) | `Admin` only |
 | Set session priority | `SessionPriority`, `Tags`, or `Admin` |
+| Schedule a delayed start | `Admin` only (app-side gate — see below) |
 | View past sessions (`GetSessions`) | `Analysis`, `Tags`, or `Admin` |
 
 Users without the right role see a plain explanation instead of a control
@@ -204,6 +205,22 @@ All of these live in the charger dashboard, directly on or under the dial:
   RFID scan at the charger); the field is prefilled with the charger's own
   id, the same convention this app already uses to detect and label
   "Free vending" sessions.
+- **Delayed start — a clock icon button** (non-allocation groups only,
+  `Admin`, and only while a session is running). Opens a time picker; the
+  charger then holds at 0 A until that time and charges at the limit shown
+  on the dial. It starts *itself* — neither Balanz nor the app is involved
+  when the time arrives, so the app need not be open. A time already past
+  today is taken as tomorrow, so "00:45" entered at 21:00 means tonight.
+  While waiting the charger reports `SuspendedEVSE`; the dial says
+  "Charging scheduled 00:45" so it doesn't read as a fault. Tapping the
+  (now amber) button charges immediately, which is also how a delay is
+  cancelled — there is no separate clear command, `SetTxProfile` simply
+  replaces the schedule. Unplugging the car cancels it too, since the
+  underlying OCPP profile is bound to the transaction.
+  Gated on `Admin` *by the app*, though the backend also allows
+  `SessionPriority` and `Tags`: cancelling goes through `SetTxProfile`,
+  which is Admin-only, so a wider gate would let a user arrange a delay they
+  could not then lift.
 - **Session priority — a −/value/+ stepper** (allocation groups only),
   applied with its own button.
 - **Charging graph — a QueryStats icon button** next to Play/Stop, matching
@@ -657,6 +674,14 @@ sha256 in `users.csv`). The response carries only `user_type` — see
   `id_tag`, `user_name`, `start_time`, `meter_start`, `usage_meter`,
   `energy_meter`, and `charging_history`
 
+Delayed starts use `SetDelayedCharging` (`charger_id`, `connector_id`,
+`limit`, `start_time` as local `YYYY-MM-DD HH:MM:SS`). The backend sets an
+OCPP TxProfile whose schedule holds 0 A until `start_time`, then applies
+`limit`. It is refused for allocation groups (`GroupIsManaged`) and for a
+time already past (`StartTimeInPast`). Balanz does not report schedules back,
+so the app remembers a pending one locally (`src/delayedCharging.js`), keyed
+by transaction id so a stale note is dropped once the session ends.
+
 Groups (`GetGroups`) additionally expose `max_allocation` (non-null marks an
 allocation/SmartCharging group — see "Group types & permissions" above) and
 `max_allocation_now`.
@@ -688,6 +713,7 @@ src/
   apiClient.js                    Centralized WebSocket API client (auth, calls, normalization, roles)
   App.jsx                         Top-level state/routing (groups root vs. charger detail) + header nav
   version.js                      Build-time injected app version / build date (see "Version & build info")
+  delayedCharging.js              Delayed-start helpers: next-occurrence time resolution + the local record of a pending schedule
   styles.css                      Light theme (MUI-style palette matching balanz-ui)
   components/
     LoginScreen.jsx               Sign-in form, saves credential via Credential Management API

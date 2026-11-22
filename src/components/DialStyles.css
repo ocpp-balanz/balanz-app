@@ -91,6 +91,25 @@
   background: var(--info);
 }
 
+/* Arranging a delayed start. A control action like Play/Stop, so it takes a
+   control colour rather than the neutral one the view actions share. */
+.icon-button-schedule {
+  background: var(--accent);
+}
+
+/* The same button once a delay is pending: tapping it charges immediately.
+   Warning-coloured so a waiting session reads at a glance - the charger only
+   reports SuspendedEVSE, which otherwise looks like a fault. */
+.icon-button-scheduled {
+  background: var(--warning);
+}
+
+/* The "charging scheduled for 00:45" line under the dial, in the same warning
+   colour as the button it belongs to. */
+.dial-readout-scheduled output {
+  color: var(--warning);
+}
+
 /* Past sessions and the audit log - read-only view actions, so they share
    the graph icon's neutral treatment rather than a control colour. */
 .icon-button-sessions {
