@@ -498,3 +498,25 @@
     font-size: 1.05rem;
   }
 }
+
+/* Hour/minute selects for a delayed start. Two selects rather than an
+   <input type="time">, which browsers format by locale and show as a 12-hour
+   clock with AM/PM in some of them - the app is 24-hour throughout. */
+.time-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* Equal halves. Padding, border and font come from .field select in
+   styles.css, so these match every other field in the app. */
+.time-picker select {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.time-picker > span {
+  color: var(--muted-text);
+  font-weight: 700;
+}

@@ -670,14 +670,13 @@ export default function App() {
    * Balanz keeps no record of the schedule, so the app notes it locally (see
    * src/delayedCharging.js) purely to be able to say a delay is pending.
    */
-  async function handleScheduleDelayedCharging(startTime) {
+  async function handleScheduleDelayedCharging(startTime, limit) {
     const connector = selectedCharger?.activeConnector;
     if (!selectedCharger || !connector || !connector.transactionId) {
       setDetailError('No active session is available to schedule.');
       return;
     }
 
-    const limit = Number(draftMaxCurrent ?? connector.offered ?? selectedCharger.connMax ?? 16);
 
     setSaving(true);
     setDetailError('');
@@ -713,14 +712,13 @@ export default function App() {
    * replaces the scheduled profile, since both use the same charging profile id
    * and stack level on the charger.
    */
-  async function handleChargeNow() {
+  async function handleChargeNow(limit) {
     const connector = selectedCharger?.activeConnector;
     if (!selectedCharger || !connector || !connector.transactionId) {
       setDetailError('No active session is available.');
       return;
     }
 
-    const limit = Number(draftMaxCurrent ?? connector.offered ?? selectedCharger.connMax ?? 16);
 
     setSaving(true);
     setDetailError('');

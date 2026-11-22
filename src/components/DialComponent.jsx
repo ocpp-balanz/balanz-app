@@ -29,6 +29,9 @@ const MIN_DIRECT_CURRENT_A = 6;
 // the reason this exists.
 const DEFAULT_SCHEDULE_TIME = '00:45';
 
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTIONS = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
+
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
@@ -196,6 +199,7 @@ export default function DialComponent({
   // "HH:MM" as an <input type="time"> wants it. Defaults to the small hours,
   // which is the whole point of the feature.
   const [scheduleTime, setScheduleTime] = useState(DEFAULT_SCHEDULE_TIME);
+  const [scheduleHour, scheduleMinute] = scheduleTime.split(':');
   // Remote-start tag selection. The charger accepts any string as an id_tag,
   // so rather than a free-text field (which risks starting a session with an
   // id no real tag owns), the user picks a known tag from GetTags. `tagSearch`
@@ -267,6 +271,11 @@ export default function DialComponent({
   // allocation group outright (GroupIsManaged), since its own loop would
   // overwrite the schedule within seconds.
   const canSchedule = canStop && !isAllocationGroup && canScheduleCharging(userType);
+  // The limit to schedule, and to restore when charging now. The dial reads 0 A
+  // while a session sits suspended - which is exactly the state this feature
+  // puts it in - and scheduling a start at 0 A would mean never starting, so
+  // fall back to what the charger can actually deliver.
+  const scheduleLimit = draftValue > 0 ? draftValue : charger.connMax ?? 16;
 
   const userDisplay = session
     ? session.isFreeVending
@@ -459,7 +468,7 @@ export default function DialComponent({
                   <button
                     type="button"
                     className="icon-button icon-button-scheduled"
-                    onClick={onChargeNow}
+                    onClick={() => onChargeNow(scheduleLimit)}
                     disabled={saving || loading}
                     aria-label="Charge now, cancelling the schedule"
                     title={`Scheduled for ${scheduleTimeLabel(pendingSchedule)} - tap to charge now`}
@@ -625,28 +634,44 @@ export default function DialComponent({
                 const startTime = resolveScheduleTime(scheduleTime);
                 if (!startTime) return;
                 setScheduleModalOpen(false);
-                onScheduleDelayedCharging(startTime);
+                onScheduleDelayedCharging(startTime, scheduleLimit);
               }}
             >
               <label className="field">
                 <span>Start charging at</span>
-                <input
-                  type="time"
-                  value={scheduleTime}
-                  onChange={(event) => setScheduleTime(event.target.value)}
-                  required
-                />
+                {/* Two selects rather than <input type="time">: that control is
+                    formatted by browser locale and shows AM/PM in some of them,
+                    and the app is 24-hour throughout. */}
+                <div className="time-picker">
+                  <select
+                    value={scheduleHour}
+                    onChange={(event) => setScheduleTime(`${event.target.value}:${scheduleMinute}`)}
+                    aria-label="Hour"
+                  >
+                    {HOUR_OPTIONS.map((hour) => (
+                      <option key={hour} value={hour}>
+                        {hour}
+                      </option>
+                    ))}
+                  </select>
+                  <span aria-hidden="true">:</span>
+                  <select
+                    value={scheduleMinute}
+                    onChange={(event) => setScheduleTime(`${scheduleHour}:${event.target.value}`)}
+                    aria-label="Minute"
+                  >
+                    {MINUTE_OPTIONS.map((minute) => (
+                      <option key={minute} value={minute}>
+                        {minute}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </label>
 
               <p className="subtle">
-                The charger holds at 0 A until {scheduleTime || '--:--'} and then charges at{' '}
-                {draftValue} A, the limit shown on the dial. It starts on its own - the app does
-                not need to be open. A time already past today is taken as tomorrow.
-              </p>
-
-              <p className="subtle">
-                While waiting the charger reports <strong>SuspendedEVSE</strong>, which is normal.
-                Unplugging the car cancels the schedule.
+                Holds at 0 A until {scheduleTime}, then charges at {scheduleLimit} A.
+                A time already past means tomorrow.
               </p>
 
               <div className="action-row">

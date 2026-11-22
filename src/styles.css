@@ -148,7 +148,10 @@ code {
   font-size: 0.9rem;
 }
 
-.field input {
+/* Selects share the text inputs' treatment - a field should look the same
+   whether it is typed into or chosen from. */
+.field input,
+.field select {
   width: 100%;
   border-radius: 8px;
   border: 1px solid var(--border-color);
@@ -156,9 +159,11 @@ code {
   color: var(--text-color);
   padding: 0.85rem 0.95rem;
   outline: none;
+  font: inherit;
 }
 
-.field input:focus {
+.field input:focus,
+.field select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
